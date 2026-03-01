@@ -1,6 +1,6 @@
 // API Keys
 export const GROQ_API_KEY = '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';
-export const HELIUS_RPC_URL = 'https://api.devnet.solana.com'; // Fallback until Helius key is provided
+export const HELIUS_RPC_URL = 'https://devnet.helius-rpc.com/?api-key=8cb5e526-7ec0-4290-8943-13f9442457f2';
 
 // Solana
 export const SKR_MINT_ADDRESS = 'SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3';

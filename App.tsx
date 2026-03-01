@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, StyleSheet, Alert } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
 
+import ConnectWalletScreen from './src/screens/ConnectWalletScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import BattleScreen from './src/screens/BattleScreen';
 import MatchmakingScreen from './src/screens/MatchmakingScreen';
@@ -10,13 +10,15 @@ import ResultsScreen from './src/screens/ResultsScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 
-import { colors } from './src/config/theme';
+import { useWallet } from './src/hooks/useWallet';
+import { useAuth } from './src/hooks/useAuth';
+import { colors, fontSize, fontWeight, spacing } from './src/config/theme';
 import { DEFAULT_RATING, ROLES, UserRole, QUESTIONS_PER_MATCH } from './src/config/constants';
-import { Player, Match, Question, DailyQuest, LeaderboardEntry, MatchPlayer } from './src/types';
+import { Player, Match, Question, DailyQuest, LeaderboardEntry } from './src/types';
 import { calculateMatchRatings, calculateXP } from './src/services/matchmaking/ratingSystem';
-import { generateQuestionsFromNews, fetchLatestNews } from './src/services/ai/questionGenerator';
+import { getLeaderboard } from './src/services/firebase/firestore';
 
-// ─── App State Types ────────────────────────────────────
+// ─── Screen Type ─────────────────────────────────────────
 type Screen =
   | 'home'
   | 'matchmaking'
@@ -27,313 +29,279 @@ type Screen =
   | 'quests'
   | 'history';
 
-// ─── Mock Data ──────────────────────────────────────────
-const MOCK_PLAYER: Player = {
-  id: 'player_1',
-  walletAddress: '7vfC...x9Qd',
-  seekerId: '4827',
-  username: 'CryptoKing',
-  primaryRole: 'Trader',
-  roles: ['Trader', 'DeFi User'],
-  ratings: ROLES.reduce((acc, role) => {
-    acc[role] = DEFAULT_RATING;
-    return acc;
-  }, {} as Record<UserRole, number>),
-  xp: 1250,
-  level: 4,
-  matchesPlayed: 23,
-  matchesWon: 15,
-  currentStreak: 5,
-  bestStreak: 8,
-  avgReactionTime: 2800,
-  badges: [
-    { id: 'b1', name: 'First Blood', description: 'Win your first match', icon: '🗡️', earnedAt: Date.now() },
-    { id: 'b2', name: 'Speed Demon', description: 'Answer in under 2s', icon: '⚡', earnedAt: Date.now() },
-  ],
-  isSkrStaker: true,
-  skrBalance: 500,
-  createdAt: Date.now() - 86400000 * 7,
-  lastActiveAt: Date.now(),
-};
-
-const MOCK_DAILY_QUESTS: DailyQuest[] = [
+// ─── Fallback Questions (until Groq pipeline is wired) ──
+const FALLBACK_QUESTIONS: Question[] = [
   {
-    id: 'q1',
-    title: 'Win 3 Matches',
-    description: 'Win 3 quiz battles today',
-    type: 'win_matches',
-    target: 3,
-    progress: 2,
-    xpReward: 75,
-    isCompleted: false,
-    icon: '⚔️',
-  },
-  {
-    id: 'q2',
-    title: 'Answer 10 Questions',
-    description: 'Answer 10 questions correctly',
-    type: 'answer_questions',
-    target: 10,
-    progress: 7,
-    xpReward: 50,
-    isCompleted: false,
-    icon: '🧠',
-  },
-  {
-    id: 'q3',
-    title: 'SKR Tournament',
-    description: 'Play 1 SKR-wager match',
-    type: 'skr_tournament',
-    target: 1,
-    progress: 0,
-    xpReward: 150,
-    isCompleted: false,
-    icon: '💎',
-  },
-];
-
-const MOCK_QUESTIONS: Question[] = [
-  {
-    id: 'mq1',
+    id: 'fq1',
     question: 'Which DEX is the largest aggregator on Solana?',
     options: ['Jupiter', 'Orca', 'Raydium', 'Tensor'],
     correctIndex: 0,
     role: 'Trader',
     difficulty: 2,
     sourceDate: Date.now(),
-    sourceSummary: 'Solana DEX market data',
+    sourceSummary: 'Solana DEX ecosystem',
     createdAt: Date.now(),
     expiresAt: Date.now() + 7 * 86400000,
   },
   {
-    id: 'mq2',
-    question: 'What is Solana\'s approximate TPS capacity?',
-    options: ['400', '4,000', '40,000', '400,000'],
+    id: 'fq2',
+    question: "What is Solana's consensus mechanism called?",
+    options: ['Proof of Work', 'Proof of History', 'Proof of Stake', 'Delegated PoS'],
     correctIndex: 1,
-    role: 'Trader',
+    role: 'Developer',
     difficulty: 1,
     sourceDate: Date.now(),
-    sourceSummary: 'Solana technical specs',
+    sourceSummary: 'Solana architecture',
     createdAt: Date.now(),
     expiresAt: Date.now() + 7 * 86400000,
   },
   {
-    id: 'mq3',
-    question: 'What hardware security does Seeker use?',
+    id: 'fq3',
+    question: 'What hardware security does the Seeker device use?',
     options: ['Secure Element', 'Seed Vault', 'TPM Chip', 'Knox'],
     correctIndex: 1,
     role: 'Trader',
     difficulty: 2,
     sourceDate: Date.now(),
-    sourceSummary: 'Solana Mobile features',
+    sourceSummary: 'Solana Mobile Seeker',
     createdAt: Date.now(),
     expiresAt: Date.now() + 7 * 86400000,
   },
   {
-    id: 'mq4',
-    question: 'What token is the Solana Mobile coordination layer?',
-    options: ['SOL', 'BONK', 'SKR', 'MOBILE'],
-    correctIndex: 2,
-    role: 'Trader',
+    id: 'fq4',
+    question: 'What is the SPL token standard similar to on Ethereum?',
+    options: ['ERC-20', 'ERC-721', 'ERC-1155', 'BEP-20'],
+    correctIndex: 0,
+    role: 'Developer',
     difficulty: 1,
     sourceDate: Date.now(),
-    sourceSummary: 'SKR token info',
+    sourceSummary: 'Solana token standards',
     createdAt: Date.now(),
     expiresAt: Date.now() + 7 * 86400000,
   },
   {
-    id: 'mq5',
-    question: 'Which wallet is most popular on Solana?',
+    id: 'fq5',
+    question: 'Which wallet is the most popular on Solana?',
     options: ['MetaMask', 'Phantom', 'Solflare', 'Trust Wallet'],
     correctIndex: 1,
-    role: 'Trader',
+    role: 'Beginner',
     difficulty: 1,
     sourceDate: Date.now(),
-    sourceSummary: 'Solana ecosystem data',
+    sourceSummary: 'Solana ecosystem',
     createdAt: Date.now(),
     expiresAt: Date.now() + 7 * 86400000,
   },
-];
-
-const MOCK_LEADERBOARD: LeaderboardEntry[] = [
-  { rank: 1, playerId: 'p_moon', username: 'MoonTrader', rating: 2341, winRate: 78, matchesPlayed: 156, avgReactionTime: 1800, isSkrStaker: true, isCurrentUser: false },
-  { rank: 2, playerId: 'p_alpha', username: 'AlphaSeeker', rating: 2198, winRate: 72, matchesPlayed: 130, avgReactionTime: 2100, isSkrStaker: false, isCurrentUser: false },
-  { rank: 3, playerId: 'p_sol', username: 'SolMaxi', rating: 2045, winRate: 69, matchesPlayed: 98, avgReactionTime: 2400, isSkrStaker: true, isCurrentUser: false },
-  { rank: 4, playerId: 'p_chain', username: 'ChainBrain', rating: 1987, winRate: 65, matchesPlayed: 87, avgReactionTime: 2300, isSkrStaker: false, isCurrentUser: false },
-  { rank: 5, playerId: 'p_defi', username: 'DeFiQueen', rating: 1923, winRate: 64, matchesPlayed: 76, avgReactionTime: 2500, isSkrStaker: true, isCurrentUser: false },
-  { rank: 6, playerId: 'p_nft', username: 'NFTHunter', rating: 1899, winRate: 61, matchesPlayed: 65, avgReactionTime: 2600, isSkrStaker: false, isCurrentUser: false },
-  { rank: 7, playerId: 'player_1', username: 'CryptoKing', rating: 1847, winRate: 65, matchesPlayed: 23, avgReactionTime: 2800, isSkrStaker: true, isCurrentUser: true },
-  { rank: 8, playerId: 'p_block', username: 'BlockSmith', rating: 1823, winRate: 58, matchesPlayed: 54, avgReactionTime: 2900, isSkrStaker: false, isCurrentUser: false },
 ];
 
 export default function App() {
+  // ─── Hooks ─────────────────────────────────────────────
+  const wallet = useWallet();
+  const authHook = useAuth();
+
+  // ─── App State ─────────────────────────────────────────
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
-  const [player, setPlayer] = useState<Player>(MOCK_PLAYER);
   const [selectedRole, setSelectedRole] = useState<UserRole>('Trader');
   const [wagerType, setWagerType] = useState<'sol' | 'skr'>('sol');
   const [currentMatch, setCurrentMatch] = useState<Match | null>(null);
   const [ratingResult, setRatingResult] = useState<any>(null);
   const [xpEarned, setXpEarned] = useState(0);
-  const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>(MOCK_LEADERBOARD);
+  const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
+  const [appReady, setAppReady] = useState(false);
 
-  // ─── Handlers ───────────────────────────────────────────
-  const handleFindMatch = useCallback((role: UserRole, wager: 'sol' | 'skr') => {
-    setSelectedRole(role);
-    setWagerType(wager);
-    setCurrentScreen('matchmaking');
+  // ─── Wallet → Auth bridge ─────────────────────────────
+  useEffect(() => {
+    if (wallet.connected && wallet.address) {
+      authHook.signIn(wallet.address).catch((err) => {
+        console.error('[App] Auth sign-in failed:', err);
+      });
+    }
+  }, [wallet.connected, wallet.address]);
 
-    // Simulate matchmaking delay, then create a match
-    setTimeout(() => {
-      const opponentRating = player.ratings[role] + Math.floor(Math.random() * 200 - 100);
-      const match: Match = {
-        id: `match_${Date.now()}`,
-        playerA: {
-          id: player.id,
-          username: player.username,
-          rating: player.ratings[role] || DEFAULT_RATING,
-          answers: [],
-          score: 0,
-          isReady: true,
-        },
-        playerB: {
-          id: 'bot_opponent',
-          username: 'SolWarrior',
-          rating: opponentRating,
-          answers: [],
-          score: 0,
-          isReady: true,
-        },
-        questions: MOCK_QUESTIONS.slice(0, QUESTIONS_PER_MATCH),
-        currentQuestionIndex: 0,
-        wagerLamports: 50000000, // 0.05 SOL
-        status: 'in_progress',
-        createdAt: Date.now(),
-        startedAt: Date.now(),
+  // App is ready once wallet hook has finished restoring
+  useEffect(() => {
+    // Small delay to let restore finish
+    const timer = setTimeout(() => setAppReady(true), 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Fetch leaderboard when entering that screen
+  useEffect(() => {
+    if (currentScreen === 'leaderboard' && authHook.player) {
+      getLeaderboard(selectedRole)
+        .then((entries) => {
+          // Mark current user
+          const marked = entries.map((e) => ({
+            ...e,
+            isCurrentUser: e.playerId === authHook.player?.id,
+          }));
+          setLeaderboardEntries(marked);
+        })
+        .catch((err) => {
+          console.warn('[App] Leaderboard fetch failed:', err);
+        });
+    }
+  }, [currentScreen, selectedRole]);
+
+  // ─── Handlers ──────────────────────────────────────────
+  const handleWalletConnect = useCallback(async () => {
+    await wallet.connect();
+  }, [wallet]);
+
+  const handleDevConnect = useCallback(async () => {
+    await wallet.devConnect();
+  }, [wallet]);
+
+  const handleCreateProfile = useCallback(
+    async (username: string, role: UserRole) => {
+      if (!wallet.address) return;
+      await authHook.createProfile(wallet.address, username, role);
+    },
+    [wallet.address, authHook]
+  );
+
+  const handleFindMatch = useCallback(
+    (role: UserRole, wager: 'sol' | 'skr') => {
+      if (!authHook.player) return;
+      setSelectedRole(role);
+      setWagerType(wager);
+      setCurrentScreen('matchmaking');
+
+      // Simulate matchmaking — in production, this goes through Firestore
+      setTimeout(() => {
+        const playerRating = authHook.player!.ratings[role] || DEFAULT_RATING;
+        const opponentRating = playerRating + Math.floor(Math.random() * 200 - 100);
+
+        const match: Match = {
+          id: `match_${Date.now()}`,
+          playerA: {
+            id: authHook.player!.id,
+            username: authHook.player!.username,
+            rating: playerRating,
+            answers: [],
+            score: 0,
+            isReady: true,
+          },
+          playerB: {
+            id: 'bot_opponent',
+            username: 'SolWarrior',
+            rating: opponentRating,
+            answers: [],
+            score: 0,
+            isReady: true,
+          },
+          questions: FALLBACK_QUESTIONS.slice(0, QUESTIONS_PER_MATCH),
+          currentQuestionIndex: 0,
+          wagerLamports: 50000000,
+          status: 'in_progress',
+          createdAt: Date.now(),
+          startedAt: Date.now(),
+        };
+        setCurrentMatch(match);
+        setCurrentScreen('battle');
+      }, 3000 + Math.random() * 4000);
+    },
+    [authHook.player]
+  );
+
+  const handleAnswer = useCallback(
+    (questionIndex: number, selectedOption: number, reactionTimeMs: number) => {
+      if (!currentMatch || !authHook.player) return;
+
+      const question = currentMatch.questions[questionIndex];
+      const isCorrect = selectedOption === question.correctIndex;
+
+      const playerAnswer = {
+        questionIndex,
+        selectedOption,
+        isCorrect,
+        reactionTimeMs,
+        answeredAt: Date.now(),
       };
-      setCurrentMatch(match);
-      setCurrentScreen('battle');
-    }, 3000 + Math.random() * 4000);
-  }, [player]);
 
-  const handleAnswer = useCallback((questionIndex: number, selectedOption: number, reactionTimeMs: number) => {
-    if (!currentMatch) return;
-
-    const question = currentMatch.questions[questionIndex];
-    const isCorrect = selectedOption === question.correctIndex;
-
-    // Player answer
-    const playerAnswer = {
-      questionIndex,
-      selectedOption,
-      isCorrect,
-      reactionTimeMs,
-      answeredAt: Date.now(),
-    };
-
-    // Simulate bot answer
-    const botCorrect = Math.random() > 0.4;
-    const botAnswer = {
-      questionIndex,
-      selectedOption: botCorrect ? question.correctIndex : (question.correctIndex + 1) % 4,
-      isCorrect: botCorrect,
-      reactionTimeMs: 1500 + Math.random() * 5000,
-      answeredAt: Date.now(),
-    };
-
-    setCurrentMatch((prev) => {
-      if (!prev) return prev;
-      const updatedA = {
-        ...prev.playerA,
-        answers: [...prev.playerA.answers, playerAnswer],
-        score: prev.playerA.score + (isCorrect ? 1 : 0),
-      };
-      const updatedB = {
-        ...prev.playerB,
-        answers: [...prev.playerB.answers, botAnswer],
-        score: prev.playerB.score + (botCorrect ? 1 : 0),
+      const botCorrect = Math.random() > 0.4;
+      const botAnswer = {
+        questionIndex,
+        selectedOption: botCorrect
+          ? question.correctIndex
+          : (question.correctIndex + 1) % 4,
+        isCorrect: botCorrect,
+        reactionTimeMs: 1500 + Math.random() * 5000,
+        answeredAt: Date.now(),
       };
 
-      const nextQuestionIndex = prev.currentQuestionIndex + 1;
-      const isLastQuestion = nextQuestionIndex >= prev.questions.length;
+      setCurrentMatch((prev) => {
+        if (!prev) return prev;
+        const updatedA = {
+          ...prev.playerA,
+          answers: [...prev.playerA.answers, playerAnswer],
+          score: prev.playerA.score + (isCorrect ? 1 : 0),
+        };
+        const updatedB = {
+          ...prev.playerB,
+          answers: [...prev.playerB.answers, botAnswer],
+          score: prev.playerB.score + (botCorrect ? 1 : 0),
+        };
 
-      if (isLastQuestion) {
-        // Determine winner
-        const winnerId =
-          updatedA.score > updatedB.score
-            ? updatedA.id
-            : updatedB.score > updatedA.score
-            ? updatedB.id
-            : undefined;
+        const nextIdx = prev.currentQuestionIndex + 1;
+        const isLast = nextIdx >= prev.questions.length;
 
-        // Calculate rating changes
-        const isWinner = winnerId === player.id;
-        const result = calculateMatchRatings(
-          isWinner ? updatedA.rating : updatedB.rating,
-          isWinner ? updatedB.rating : updatedA.rating
-        );
-        setRatingResult(result);
+        if (isLast) {
+          const winnerId =
+            updatedA.score > updatedB.score
+              ? updatedA.id
+              : updatedB.score > updatedA.score
+              ? updatedB.id
+              : undefined;
 
-        // Calculate XP
-        const correctCount = updatedA.answers.filter((a) => a.isCorrect).length;
-        const avgReaction =
-          updatedA.answers.reduce((sum, a) => sum + a.reactionTimeMs, 0) / updatedA.answers.length;
-        const xp = calculateXP(
-          isWinner,
-          correctCount,
-          prev.questions.length,
-          avgReaction,
-          player.isSkrStaker,
-          player.currentStreak
-        );
-        setXpEarned(xp);
+          const isWin = winnerId === authHook.player?.id;
+          const result = calculateMatchRatings(
+            isWin ? updatedA.rating : updatedB.rating,
+            isWin ? updatedB.rating : updatedA.rating
+          );
+          setRatingResult(result);
 
-        // Navigate to results after a brief delay
+          const correctCount = updatedA.answers.filter((a) => a.isCorrect).length;
+          const avgReaction =
+            updatedA.answers.reduce((sum, a) => sum + a.reactionTimeMs, 0) /
+            updatedA.answers.length;
+          const xp = calculateXP(
+            isWin,
+            correctCount,
+            prev.questions.length,
+            avgReaction,
+            authHook.player?.isSkrStaker || false,
+            authHook.player?.currentStreak || 0
+          );
+          setXpEarned(xp);
+
+          setTimeout(() => setCurrentScreen('results'), 2000);
+
+          return {
+            ...prev,
+            playerA: updatedA,
+            playerB: updatedB,
+            currentQuestionIndex: nextIdx,
+            status: 'finished',
+            winnerId,
+            endedAt: Date.now(),
+          };
+        }
+
         setTimeout(() => {
-          setCurrentScreen('results');
+          setCurrentMatch((m) =>
+            m ? { ...m, currentQuestionIndex: nextIdx } : m
+          );
         }, 2000);
 
-        return {
-          ...prev,
-          playerA: updatedA,
-          playerB: updatedB,
-          currentQuestionIndex: nextQuestionIndex,
-          status: 'finished',
-          winnerId,
-          endedAt: Date.now(),
-        };
-      }
+        return { ...prev, playerA: updatedA, playerB: updatedB };
+      });
+    },
+    [currentMatch, authHook.player]
+  );
 
-      // Move to next question after a delay
-      setTimeout(() => {
-        setCurrentMatch((m) => {
-          if (!m) return m;
-          return { ...m, currentQuestionIndex: nextQuestionIndex };
-        });
-      }, 2000);
-
-      return {
-        ...prev,
-        playerA: updatedA,
-        playerB: updatedB,
-      };
-    });
-  }, [currentMatch, player]);
-
-  const handleMatchEnd = useCallback(() => {
-    setCurrentScreen('results');
-  }, []);
-
-  const handleNavigate = useCallback((screen: string) => {
-    setCurrentScreen(screen as Screen);
-  }, []);
-
-  const handleMatchFound = useCallback((matchId: string) => {
-    // Already handled in findMatch timeout
-  }, []);
-
-  const handleCancel = useCallback(() => {
-    setCurrentScreen('home');
-  }, []);
+  const handleMatchEnd = useCallback(() => setCurrentScreen('results'), []);
+  const handleNavigate = useCallback((s: string) => setCurrentScreen(s as Screen), []);
+  const handleCancel = useCallback(() => setCurrentScreen('home'), []);
 
   const handlePlayAgain = useCallback(() => {
     setCurrentMatch(null);
@@ -345,12 +313,44 @@ export default function App() {
     setCurrentScreen('home');
   }, []);
 
-  const handleLeaderboardRoleChange = useCallback((role: UserRole) => {
-    // In production, fetch from Firestore for this role
-    // For now, mock data stays the same
+  const handleLeaderboardRoleChange = useCallback((_role: UserRole) => {
+    // Will trigger the useEffect for leaderboard refetch
   }, []);
 
-  // ─── Screen Router ────────────────────────────────────
+  // ─── Loading splash ────────────────────────────────────
+  if (!appReady) {
+    return (
+      <View style={styles.loadingContainer}>
+        <StatusBar style="light" backgroundColor={colors.bg} />
+        <Text style={styles.loadingLogo}>SR</Text>
+        <ActivityIndicator color={colors.primary} size="large" style={{ marginTop: 24 }} />
+      </View>
+    );
+  }
+
+  // ─── Auth Gate ─────────────────────────────────────────
+  if (!wallet.connected || authHook.isNewUser || !authHook.player) {
+    return (
+      <View style={styles.container}>
+        <StatusBar style="light" backgroundColor={colors.bg} />
+        <ConnectWalletScreen
+          onConnect={handleWalletConnect}
+          onDevConnect={handleDevConnect}
+          onCreateProfile={handleCreateProfile}
+          connecting={wallet.connecting}
+          isNewUser={authHook.isNewUser}
+          walletAddress={wallet.address}
+          shortAddress={wallet.shortAddress}
+          error={wallet.error}
+          loading={authHook.loading}
+        />
+      </View>
+    );
+  }
+
+  // ─── Authenticated App ─────────────────────────────────
+  const player = authHook.player;
+
   const renderScreen = () => {
     switch (currentScreen) {
       case 'home':
@@ -359,7 +359,7 @@ export default function App() {
             player={player}
             onFindMatch={handleFindMatch}
             onNavigate={handleNavigate}
-            dailyQuests={MOCK_DAILY_QUESTS}
+            dailyQuests={authHook.dailyQuests}
           />
         );
       case 'matchmaking':
@@ -369,7 +369,7 @@ export default function App() {
             playerRating={player.ratings[selectedRole] || DEFAULT_RATING}
             playerUsername={player.username}
             wagerType={wagerType}
-            onMatchFound={handleMatchFound}
+            onMatchFound={() => {}}
             onCancel={handleCancel}
           />
         );
@@ -405,19 +405,14 @@ export default function App() {
           />
         );
       case 'profile':
-        return (
-          <ProfileScreen
-            player={player}
-            onNavigate={handleNavigate}
-          />
-        );
+        return <ProfileScreen player={player} onNavigate={handleNavigate} />;
       default:
         return (
           <HomeScreen
             player={player}
             onFindMatch={handleFindMatch}
             onNavigate={handleNavigate}
-            dailyQuests={MOCK_DAILY_QUESTS}
+            dailyQuests={authHook.dailyQuests}
           />
         );
     }
@@ -435,5 +430,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingLogo: {
+    fontSize: 48,
+    fontWeight: fontWeight.extrabold,
+    color: colors.primary,
+    letterSpacing: 4,
   },
 });
