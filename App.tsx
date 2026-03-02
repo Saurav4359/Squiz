@@ -19,6 +19,7 @@ import { calculateMatchRatings, calculateXP } from './src/services/matchmaking/r
 import { generateQuestionsFromNews, fetchLatestNews } from './src/services/ai/questionGenerator';
 import { getLeaderboard } from './src/services/firebase/firestore';
 import { persistMatchResult } from './src/services/firebase/matchResult';
+import { createEscrow, depositWager, resolveEscrow } from './src/services/wallet/escrow';
 
 // ─── Screen Type ─────────────────────────────────────────
 type Screen =
@@ -188,8 +189,9 @@ export default function App() {
         const playerRating = authHook.player!.ratings[role] || DEFAULT_RATING;
         const opponentRating = playerRating + Math.floor(Math.random() * 200 - 100);
 
+        const matchId = `match_${Date.now()}`;
         const match: Match = {
-          id: `match_${Date.now()}`,
+          id: matchId,
           playerA: {
             id: authHook.player!.id,
             username: authHook.player!.username,
@@ -213,6 +215,18 @@ export default function App() {
           createdAt: Date.now(),
           startedAt: Date.now(),
         };
+
+        // Create escrow and deposit (fire-and-forget — doesn't block match start)
+        createEscrow(matchId, authHook.player!.id, 'bot_opponent', wager)
+          .then(() => depositWager(
+            matchId,
+            authHook.player!.id,
+            wallet.address || '',
+            wallet.authToken || 'dev_token',
+            wager
+          ))
+          .catch(e => console.warn('[App] Escrow setup failed:', e));
+
         setCurrentMatch(match);
         setCurrentScreen('battle');
       };
