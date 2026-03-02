@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { Player, DailyQuest } from '../../types';
-import { UserRole } from '../../config/constants';
+import { UserRole, ROLES } from '../../config/constants';
 
 // For development, ensure you define EXPO_PUBLIC_DATABASE_URL in .env
 const DATABASE_URL = process.env.EXPO_PUBLIC_DATABASE_URL || 'postgresql://user:pass@ep-fake-host.neon.tech/neondb?sslmode=require';
@@ -14,9 +14,9 @@ export async function getPlayer(walletAddress: string): Promise<Player | null> {
   
   const p = result[0];
   const defaultRatings = {
-      [UserRole.DEGEN]: 1200,
-      [UserRole.DEV]: 1200,
-      [UserRole.NORMIE]: 1200,
+      [ROLES[0]]: 1200,
+      [ROLES[1]]: 1200,
+      [ROLES[2]]: 1200,
   } as Record<UserRole, number>;
 
   return {
@@ -60,18 +60,32 @@ export async function createPlayer(
   `;
   
   const p = result[0];
+  const defaultRatings = {
+      [ROLES[0]]: 1200,
+      [ROLES[1]]: 1200,
+      [ROLES[2]]: 1200,
+  } as Record<UserRole, number>;
+
   return {
     id: p.id,
     walletAddress: p.walletaddress,
     seekerId: p.seekerid,
     username: p.username,
+    roles: [p.primaryrole as UserRole],
     primaryRole: p.primaryrole as UserRole,
-    rating: p.rating,
-    matchesPlayed: p.matchesplayed,
-    wins: p.wins,
-    losses: p.losses,
-    createdAt: Number(p.createdat),
-    lastActiveAt: Number(p.lastactiveat),
+    ratings: defaultRatings,
+    xp: 0,
+    level: 1,
+    matchesPlayed: p.matchesplayed || 0,
+    matchesWon: p.wins || 0,
+    currentStreak: 0,
+    bestStreak: 0,
+    avgReactionTime: 0,
+    badges: [],
+    isSkrStaker: false,
+    skrBalance: 0,
+    createdAt: Number(p.createdat) || Date.now(),
+    lastActiveAt: Number(p.lastactiveat) || Date.now(),
   };
 }
 
