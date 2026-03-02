@@ -20,9 +20,11 @@ import {
 interface ProfileScreenProps {
   player: Player;
   onNavigate: (screen: string) => void;
+  walletBalance?: { sol: number; skr: number };
+  onDisconnect?: () => void;
 }
 
-export default function ProfileScreen({ player, onNavigate }: ProfileScreenProps) {
+export default function ProfileScreen({ player, onNavigate, walletBalance, onDisconnect }: ProfileScreenProps) {
   const level = calculateLevel(player.xp);
   const xpProgress = getXPForNextLevel(player.xp);
 
@@ -181,13 +183,32 @@ export default function ProfileScreen({ player, onNavigate }: ProfileScreenProps
               {player.walletAddress.slice(0, 4)}...{player.walletAddress.slice(-4)}
             </Text>
           </View>
-          {player.skrBalance > 0 && (
-            <View style={styles.walletRow}>
-              <Text style={styles.walletLabel}>SKR Balance</Text>
-              <Text style={[styles.walletValue, { color: colors.purple }]}>
-                💎 {player.skrBalance.toLocaleString()}
-              </Text>
-            </View>
+          {walletBalance && (
+            <>
+              <View style={styles.walletRow}>
+                <Text style={styles.walletLabel}>SOL Balance</Text>
+                <Text style={[styles.walletValue, { color: colors.primary }]}>
+                  ◎ {walletBalance.sol.toFixed(4)}
+                </Text>
+              </View>
+              {walletBalance.skr > 0 && (
+                <View style={styles.walletRow}>
+                  <Text style={styles.walletLabel}>SKR Balance</Text>
+                  <Text style={[styles.walletValue, { color: colors.purple }]}>
+                    💎 {walletBalance.skr.toLocaleString()}
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+          {onDisconnect && (
+            <TouchableOpacity
+              style={styles.disconnectButton}
+              onPress={onDisconnect}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.disconnectText}>Disconnect Wallet</Text>
+            </TouchableOpacity>
           )}
         </View>
       </ScrollView>
@@ -434,6 +455,19 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: fontWeight.bold,
     color: colors.text,
+  },
+  disconnectButton: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    alignItems: 'center' as const,
+  },
+  disconnectText: {
+    fontSize: fontSize.sm,
+    color: colors.danger,
+    fontWeight: fontWeight.semibold,
   },
 
   // Bottom nav

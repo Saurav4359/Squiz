@@ -16,6 +16,7 @@ import { colors, fontSize, fontWeight, spacing } from './src/config/theme';
 import { DEFAULT_RATING, ROLES, UserRole, QUESTIONS_PER_MATCH } from './src/config/constants';
 import { Player, Match, Question, DailyQuest, LeaderboardEntry } from './src/types';
 import { calculateMatchRatings, calculateXP } from './src/services/matchmaking/ratingSystem';
+import { generateQuestionsFromNews, fetchLatestNews } from './src/services/ai/questionGenerator';
 import { getLeaderboard } from './src/services/firebase/firestore';
 
 // ─── Screen Type ─────────────────────────────────────────
@@ -166,8 +167,23 @@ export default function App() {
       setWagerType(wager);
       setCurrentScreen('matchmaking');
 
-      // Simulate matchmaking — in production, this goes through Firestore
-      setTimeout(() => {
+      // Fetch AI questions + simulate matchmaking in parallel
+      const startMatch = async () => {
+        let questions: Question[] = FALLBACK_QUESTIONS.slice(0, QUESTIONS_PER_MATCH);
+
+        try {
+          const news = await fetchLatestNews();
+          const aiQuestions = await generateQuestionsFromNews(news, role, QUESTIONS_PER_MATCH);
+          if (aiQuestions.length >= QUESTIONS_PER_MATCH) {
+            questions = aiQuestions.slice(0, QUESTIONS_PER_MATCH);
+          }
+        } catch (err) {
+          console.warn('[App] AI question gen failed, using fallbacks:', err);
+        }
+
+        // Ensure minimum matchmaking time for UX
+        await new Promise((r) => setTimeout(r, 3000 + Math.random() * 2000));
+
         const playerRating = authHook.player!.ratings[role] || DEFAULT_RATING;
         const opponentRating = playerRating + Math.floor(Math.random() * 200 - 100);
 
@@ -189,7 +205,7 @@ export default function App() {
             score: 0,
             isReady: true,
           },
-          questions: FALLBACK_QUESTIONS.slice(0, QUESTIONS_PER_MATCH),
+          questions,
           currentQuestionIndex: 0,
           wagerLamports: 50000000,
           status: 'in_progress',
@@ -198,7 +214,9 @@ export default function App() {
         };
         setCurrentMatch(match);
         setCurrentScreen('battle');
-      }, 3000 + Math.random() * 4000);
+      };
+
+      startMatch();
     },
     [authHook.player]
   );
@@ -405,7 +423,17 @@ export default function App() {
           />
         );
       case 'profile':
-        return <ProfileScreen player={player} onNavigate={handleNavigate} />;
+        return (
+          <ProfileScreen
+            player={player}
+            onNavigate={handleNavigate}
+            walletBalance={wallet.balance}
+            onDisconnect={async () => {
+              await wallet.disconnect();
+              authHook.signOut();
+            }}
+          />
+        );
       default:
         return (
           <HomeScreen

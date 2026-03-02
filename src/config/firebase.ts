@@ -1,6 +1,8 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+// @ts-ignore - getReactNativePersistence exists at runtime but types lag behind
+import { initializeAuth, getReactNativePersistence, getAuth } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyBCwyZ2SRvMrIPC-CzFsA662z-l8jNQb5c',
@@ -12,7 +14,20 @@ const firebaseConfig = {
   measurementId: 'G-K36TKWKE7L',
 };
 
-const app = initializeApp(firebaseConfig);
+// Prevent re-initialization on hot reload
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const db = getFirestore(app);
-export const auth = getAuth(app);
+
+// Initialize auth with persistence (handle hot reload)
+let auth: ReturnType<typeof initializeAuth>;
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage),
+  });
+} catch {
+  // Already initialized (hot reload), get existing instance
+  auth = getAuth(app) as any;
+}
+
+export { auth };
 export default app;

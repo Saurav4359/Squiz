@@ -1,8 +1,18 @@
 import { Connection, PublicKey, Transaction, clusterApiUrl, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { TurboModuleRegistry } from 'react-native';
 import { HELIUS_RPC_URL, SKR_MINT_ADDRESS } from '../../config/constants';
 
-// Use expo-crypto storage as AsyncStorage alternative that's always available
+// Use expo-secure-store – always available in Expo Go
 import * as SecureStore from 'expo-secure-store';
+
+// ─── Check if MWA native module exists ───────────────────
+function isMWAAvailable(): boolean {
+  try {
+    return TurboModuleRegistry.get('SolanaMobileWalletAdapter') != null;
+  } catch {
+    return false;
+  }
+}
 
 // ─── Connection ──────────────────────────────────────────
 const CLUSTER = 'devnet';
@@ -60,47 +70,55 @@ export interface WalletSession {
 
 // ─── Connect Wallet via MWA ──────────────────────────────
 export async function connectWallet(): Promise<WalletSession> {
-  // Dynamically import MWA to avoid crash when native module isn't available
-  let transact: any;
-  try {
-    const mwa = require('@solana-mobile/mobile-wallet-adapter-protocol-web3js');
-    transact = mwa.transact;
-  } catch {
+  // Check if MWA native module is available (not in Expo Go)
+  if (!isMWAAvailable()) {
     throw new Error(
-      'No wallet adapter available. Install Phantom or Solflare on this device.'
+      'MWA not available in Expo Go. Use dev connect (long-press logo 3x) or build a dev client.'
     );
   }
 
-  const session = await transact(async (wallet: any) => {
-    const auth = await wallet.authorize({
-      chain: `solana:${CLUSTER}`,
-      identity: {
-        name: 'SeekerRank',
-        uri: 'https://seekerrank.app',
-        icon: 'favicon.ico',
-      },
+  try {
+    const { transact } = require('@solana-mobile/mobile-wallet-adapter-protocol-web3js');
+
+    const session = await transact(async (wallet: any) => {
+      const auth = await wallet.authorize({
+        chain: `solana:${CLUSTER}`,
+        identity: {
+          name: 'SeekerRank',
+          uri: 'https://seekerrank.app',
+          icon: 'favicon.ico',
+        },
+      });
+
+      const pubkeyBytes = auth.accounts[0].address;
+      const address =
+        typeof pubkeyBytes === 'string'
+          ? pubkeyBytes
+          : new PublicKey(pubkeyBytes).toBase58();
+
+      return {
+        address,
+        label: auth.accounts[0].label || 'Wallet',
+        authToken: auth.auth_token,
+      };
     });
 
-    const pubkeyBytes = auth.accounts[0].address;
-    const address =
-      typeof pubkeyBytes === 'string'
-        ? pubkeyBytes
-        : new PublicKey(pubkeyBytes).toBase58();
+    // Persist session
+    await storageSet(KEY_AUTH_TOKEN, session.authToken);
+    await storageSet(KEY_WALLET, session.address);
+    await storageSet(KEY_WALLET_LABEL, session.label);
 
-    return {
-      address,
-      label: auth.accounts[0].label || 'Wallet',
-      authToken: auth.auth_token,
-    };
-  });
-
-  // Persist session
-  await storageSet(KEY_AUTH_TOKEN, session.authToken);
-  await storageSet(KEY_WALLET, session.address);
-  await storageSet(KEY_WALLET_LABEL, session.label);
-
-  return session;
+    return session;
+  } catch (err: any) {
+    if (err?.message?.includes('MWA not available')) throw err;
+    throw new Error(
+      err?.message?.includes('User rejected')
+        ? 'Connection declined by user.'
+        : 'Wallet connection failed. Make sure Phantom or Solflare is installed.'
+    );
+  }
 }
+
 
 // ─── Reconnect from stored session ───────────────────────
 export async function restoreSession(): Promise<WalletSession | null> {
@@ -167,42 +185,45 @@ export async function signAndSendTransaction(
   transaction: Transaction,
   authToken: string
 ): Promise<string> {
-  let transact: any;
-  try {
-    const mwa = require('@solana-mobile/mobile-wallet-adapter-protocol-web3js');
-    transact = mwa.transact;
-  } catch {
-    throw new Error('Wallet adapter not available on this device.');
+  if (!isMWAAvailable()) {
+    throw new Error('MWA not available. Build a dev client for transaction signing.');
   }
 
-  const conn = getConnection();
-  const walletAddr = await storageGet(KEY_WALLET);
+  try {
+    const { transact } = require('@solana-mobile/mobile-wallet-adapter-protocol-web3js');
 
-  const signature = await transact(async (wallet: any) => {
-    await wallet.reauthorize({
-      auth_token: authToken,
-      identity: {
-        name: 'SeekerRank',
-        uri: 'https://seekerrank.app',
-        icon: 'favicon.ico',
-      },
+    const conn = getConnection();
+    const walletAddr = await storageGet(KEY_WALLET);
+
+    const signature = await transact(async (wallet: any) => {
+      await wallet.reauthorize({
+        auth_token: authToken,
+        identity: {
+          name: 'SeekerRank',
+          uri: 'https://seekerrank.app',
+          icon: 'favicon.ico',
+        },
+      });
+
+      const { blockhash } = await conn.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = new PublicKey(walletAddr || '');
+
+      const signedTxs = await wallet.signAndSendTransactions({
+        transactions: [transaction],
+      });
+
+      return signedTxs[0];
     });
 
-    const { blockhash } = await conn.getLatestBlockhash();
-    transaction.recentBlockhash = blockhash;
-    transaction.feePayer = new PublicKey(walletAddr || '');
-
-    const signedTxs = await wallet.signAndSendTransactions({
-      transactions: [transaction],
-    });
-
-    return signedTxs[0];
-  });
-
-  return typeof signature === 'string'
-    ? signature
-    : Buffer.from(signature).toString('base64');
+    return typeof signature === 'string'
+      ? signature
+      : Buffer.from(signature).toString('base64');
+  } catch (err: any) {
+    throw new Error(`Transaction failed: ${err?.message || 'Unknown error'}`);
+  }
 }
+
 
 // ─── Utilities ───────────────────────────────────────────
 export function shortenAddress(address: string, chars: number = 4): string {
