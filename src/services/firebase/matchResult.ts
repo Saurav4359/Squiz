@@ -33,6 +33,8 @@ export interface MatchResultPayload {
   isWin: boolean;
   isDraw: boolean;
   wagerType: 'sol' | 'skr';
+  winnerWalletAddress?: string;
+  authToken?: string;
 }
 
 export async function persistMatchResult(payload: MatchResultPayload): Promise<void> {
@@ -46,6 +48,8 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
     isWin,
     isDraw,
     wagerType,
+    winnerWalletAddress,
+    authToken,
   } = payload;
 
   const isPlayerA = match.playerA.id === currentPlayerId;
@@ -92,6 +96,21 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
       ? [
           updateQuestProgress(currentPlayerId, 'skr_tournament', 1)
             .catch(e => console.warn('[Match] Quest update failed:', e)),
+        ]
+      : []),
+    // 5. Resolve escrow (payout winner)
+    ...(isWin && winnerWalletAddress && authToken
+      ? [
+          (async () => {
+            const { resolveEscrow } = await import('../wallet/escrow');
+            await resolveEscrow(
+              match.id,
+              currentPlayerId,
+              winnerWalletAddress,
+              authToken,
+              wagerType
+            );
+          })().catch(e => console.warn('[Match] Payout failed:', e)),
         ]
       : []),
   ]);

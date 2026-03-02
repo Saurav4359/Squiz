@@ -331,6 +331,8 @@ export default function App() {
             isWin,
             isDraw: winnerId === undefined,
             wagerType,
+            winnerWalletAddress: wallet.address || undefined,
+            authToken: wallet.authToken || undefined,
           }).then(() => authHook.refreshPlayer())
             .catch(e => console.warn('[App] Match persist failed:', e));
 
@@ -392,8 +394,8 @@ export default function App() {
           isNewUser={authHook.isNewUser}
           walletAddress={wallet.address}
           shortAddress={wallet.shortAddress}
-          error={wallet.error}
-          loading={authHook.loading}
+          error={wallet.error || authHook.error}
+          loading={wallet.connecting || authHook.loading}
         />
       </View>
     );

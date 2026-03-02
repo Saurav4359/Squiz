@@ -152,6 +152,39 @@ export default function ConnectWalletScreen({
     );
   };
 
+  // ─── Loading Profile (returning user) ──────────────────
+  if (walletAddress && !isNewUser && (loading || !shortAddress)) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.logoArea}>
+          {renderPulseRing(ring1, 180)}
+          {renderPulseRing(ring2, 180)}
+          {renderPulseRing(ring3, 180)}
+          <View style={styles.logoContainer}>
+            <LinearGradient
+              colors={colors.gradientPrimary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.logoGradient}
+            >
+              <ActivityIndicator color={colors.bg} size="large" />
+            </LinearGradient>
+          </View>
+        </View>
+        <View style={styles.textArea}>
+          <Text style={styles.title}>AUTHENTICATING</Text>
+          <Text style={styles.subtitle}>
+            Fetching your Seeker profile...
+          </Text>
+          <View style={styles.connectedBadge}>
+            <View style={styles.connectedDot} />
+            <Text style={styles.connectedText}>{shortAddress || 'Connected'}</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   // ─── Onboarding (new user) ─────────────────────────────
   if (isNewUser && walletAddress) {
     return (

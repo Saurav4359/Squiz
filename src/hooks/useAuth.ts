@@ -20,18 +20,21 @@ export interface UseAuthReturn {
   ) => Promise<void>;
   refreshPlayer: () => Promise<void>;
   signOut: () => void;
+  error: string | null;
 }
 
 export function useAuth(): UseAuthReturn {
   const [player, setPlayer] = useState<Player | null>(null);
   const [isNewUser, setIsNewUser] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [dailyQuests, setDailyQuests] = useState<DailyQuest[]>([]);
   const [currentWallet, setCurrentWallet] = useState<string | null>(null);
 
   // Sign into Firebase anonymously and check Firestore for player profile
   const signIn = useCallback(async (walletAddress: string) => {
     setLoading(true);
+    setError(null);
     try {
       // Firebase anonymous auth
       await signInAnonymously(auth);
@@ -59,8 +62,9 @@ export function useAuth(): UseAuthReturn {
         setIsNewUser(true);
         setCurrentWallet(walletAddress);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('[useAuth] Sign in failed:', err);
+      setError(err?.message || 'Authentication failed. Please check your connection.');
       throw err;
     } finally {
       setLoading(false);
@@ -136,5 +140,6 @@ export function useAuth(): UseAuthReturn {
     createProfile,
     refreshPlayer,
     signOut,
+    error,
   };
 }
