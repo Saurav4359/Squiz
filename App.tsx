@@ -18,6 +18,7 @@ import { Player, Match, Question, DailyQuest, LeaderboardEntry } from './src/typ
 import { calculateMatchRatings, calculateXP } from './src/services/matchmaking/ratingSystem';
 import { generateQuestionsFromNews, fetchLatestNews } from './src/services/ai/questionGenerator';
 import { getLeaderboard } from './src/services/firebase/firestore';
+import { persistMatchResult } from './src/services/firebase/matchResult';
 
 // ─── Screen Type ─────────────────────────────────────────
 type Screen =
@@ -292,17 +293,33 @@ export default function App() {
           );
           setXpEarned(xp);
 
-          setTimeout(() => setCurrentScreen('results'), 2000);
-
-          return {
+          const finalMatch = {
             ...prev,
             playerA: updatedA,
             playerB: updatedB,
             currentQuestionIndex: nextIdx,
-            status: 'finished',
+            status: 'finished' as const,
             winnerId,
             endedAt: Date.now(),
           };
+
+          // Persist to Firestore asynchronously — doesn't block UI
+          persistMatchResult({
+            match: finalMatch,
+            currentPlayerId: authHook.player!.id,
+            role: selectedRole,
+            ratingResult: result,
+            xpEarned: xp,
+            correctAnswers: correctCount,
+            totalQuestions: prev.questions.length,
+            isWin,
+            isDraw: winnerId === undefined,
+            wagerType,
+          }).then(() => authHook.refreshPlayer())
+            .catch(e => console.warn('[App] Match persist failed:', e));
+
+          setTimeout(() => setCurrentScreen('results'), 2000);
+          return finalMatch;
         }
 
         setTimeout(() => {
