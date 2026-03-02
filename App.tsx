@@ -9,6 +9,7 @@ import MatchmakingScreen from './src/screens/MatchmakingScreen';
 import ResultsScreen from './src/screens/ResultsScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import MatchHistoryScreen from './src/screens/MatchHistoryScreen';
 
 import { useWallet } from './src/hooks/useWallet';
 import { useAuth } from './src/hooks/useAuth';
@@ -463,6 +464,22 @@ export default function App() {
               await wallet.disconnect();
               authHook.signOut();
             }}
+          />
+        );
+      case 'history':
+        return (
+          <MatchHistoryScreen
+            playerId={player.id}
+            onNavigate={handleNavigate}
+          />
+        );
+      case 'quests':
+        return (
+          <HomeScreen
+            player={player}
+            onFindMatch={handleFindMatch}
+            onNavigate={handleNavigate}
+            dailyQuests={authHook.dailyQuests}
           />
         );
       default:
