@@ -21,6 +21,7 @@ const { width } = Dimensions.get('window');
 
 interface ConnectWalletScreenProps {
   onConnect: () => Promise<void>;
+  onPhantomConnect?: () => Promise<void>;
   onDevConnect: () => Promise<void>;
   onCreateProfile: (username: string, role: UserRole) => Promise<void>;
   connecting: boolean;
@@ -33,6 +34,7 @@ interface ConnectWalletScreenProps {
 
 export default function ConnectWalletScreen({
   onConnect,
+  onPhantomConnect,
   onDevConnect,
   onCreateProfile,
   connecting,
@@ -359,13 +361,53 @@ export default function ConnectWalletScreen({
           </TouchableOpacity>
 
           <Text style={styles.walletHint}>
-            Phantom • Solflare • Any Solana Wallet
+            Android MWA Supported
+          </Text>
+
+          {/* Phantom Fallback Button */}
+          {onPhantomConnect && (
+            <TouchableOpacity
+              style={[styles.connectButton, { marginTop: spacing.md }]}
+              onPress={onPhantomConnect}
+              disabled={connecting}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#ab9ff2', '#512da8'] as const}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.connectGradient}
+              >
+                {connecting ? (
+                  <ActivityIndicator color={colors.bg} size="small" />
+                ) : (
+                  <>
+                    <Text style={styles.connectIcon}>👻</Text>
+                    <Text style={styles.connectText}>PHANTOM (UNIVERSAL)</Text>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+
+          <Text style={styles.walletHint}>
+            Universal App link for iOS/Expo Phantom
           </Text>
 
           {/* Error */}
           {error && (
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>{error}</Text>
+              
+              {/* Show Dev Connect explicitly if MWA is the issue */}
+              {(error.includes('MWA not available') || error.includes('Firebase Auth') || devPressCount > 0) && (
+                <TouchableOpacity 
+                  style={styles.devBypassButton}
+                  onPress={onDevConnect}
+                >
+                  <Text style={styles.devBypassText}>BYPASS WITH DEV WALLET 🛠️</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -521,6 +563,22 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: fontSize.sm,
     color: colors.danger,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  devBypassButton: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  devBypassText: {
+    fontSize: fontSize.xs,
+    color: colors.text,
+    fontWeight: fontWeight.bold,
     textAlign: 'center',
   },
 

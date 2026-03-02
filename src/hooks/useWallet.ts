@@ -9,6 +9,8 @@ import {
   devConnectWallet,
   WalletSession,
 } from '../services/wallet/solanaWallet';
+import * as Linking from 'expo-linking';
+import { connectPhantom, handlePhantomConnectRedirect } from '../services/wallet/phantomWallet';
 
 export interface WalletState {
   address: string | null;
@@ -27,6 +29,7 @@ export interface WalletState {
 export interface UseWalletReturn extends WalletState {
   connect: () => Promise<void>;
   devConnect: () => Promise<void>;
+  connectPhantomWallet: () => Promise<void>;
   disconnect: () => Promise<void>;
   refreshBalance: () => Promise<void>;
 }
@@ -87,6 +90,24 @@ export function useWallet(): UseWalletReturn {
     };
   }, [address, refreshBalance]);
 
+  // Deep Link listener for Phantom
+  useEffect(() => {
+    const handleDeepLink = async (event: Linking.EventType) => {
+      try {
+        const session = await handlePhantomConnectRedirect(event.url);
+        if (session) {
+          setAddress(session.address);
+          setLabel(session.label);
+          setAuthToken(session.authToken);
+        }
+      } catch (err: any) {
+        setError(err?.message || 'Phantom connection failed.');
+      }
+    };
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+    return () => subscription.remove();
+  }, []);
+
   // Connect via MWA
   const connect = useCallback(async () => {
     setConnecting(true);
@@ -122,6 +143,19 @@ export function useWallet(): UseWalletReturn {
     }
   }, []);
 
+  // Phantom Mobile SDK
+  const connectPhantomWallet = useCallback(async () => {
+    setConnecting(true);
+    setError(null);
+    try {
+      await connectPhantom();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to open Phantom Wallet');
+    } finally {
+      setConnecting(false);
+    }
+  }, []);
+
   // Disconnect
   const disconnect = useCallback(async () => {
     await disconnectWallet();
@@ -142,6 +176,7 @@ export function useWallet(): UseWalletReturn {
     error,
     connect,
     devConnect,
+    connectPhantomWallet,
     disconnect,
     refreshBalance,
   };

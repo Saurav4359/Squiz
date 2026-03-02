@@ -156,6 +156,10 @@ export default function App() {
     await wallet.devConnect();
   }, [wallet]);
 
+  const handlePhantomConnect = useCallback(async () => {
+    await wallet.connectPhantomWallet();
+  }, [wallet]);
+
   const handleCreateProfile = useCallback(
     async (username: string, role: UserRole) => {
       if (!wallet.address) return;
@@ -388,6 +392,7 @@ export default function App() {
         <StatusBar style="light" backgroundColor={colors.bg} />
         <ConnectWalletScreen
           onConnect={handleWalletConnect}
+          onPhantomConnect={handlePhantomConnect}
           onDevConnect={handleDevConnect}
           onCreateProfile={handleCreateProfile}
           connecting={wallet.connecting}

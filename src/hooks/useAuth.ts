@@ -1,6 +1,4 @@
 import { useState, useCallback, useEffect } from 'react';
-import { signInAnonymously } from 'firebase/auth';
-import { auth } from '../config/firebase';
 import { createPlayer, getPlayer, updatePlayer } from '../services/firebase/firestore';
 import { Player, DailyQuest } from '../types';
 import { UserRole, DEFAULT_RATING, ROLES } from '../config/constants';
@@ -31,14 +29,11 @@ export function useAuth(): UseAuthReturn {
   const [dailyQuests, setDailyQuests] = useState<DailyQuest[]>([]);
   const [currentWallet, setCurrentWallet] = useState<string | null>(null);
 
-  // Sign into Firebase anonymously and check Firestore for player profile
+  // Check Firestore for player profile based strictly on wallet logic
   const signIn = useCallback(async (walletAddress: string) => {
     setLoading(true);
     setError(null);
     try {
-      // Firebase anonymous auth
-      await signInAnonymously(auth);
-
       // Check if player exists in Firestore
       const existingPlayer = await getPlayer(walletAddress);
 
@@ -64,7 +59,8 @@ export function useAuth(): UseAuthReturn {
       }
     } catch (err: any) {
       console.error('[useAuth] Sign in failed:', err);
-      setError(err?.message || 'Authentication failed. Please check your connection.');
+      let msg = err?.message || 'Authentication failed.';
+      setError(msg);
       throw err;
     } finally {
       setLoading(false);
