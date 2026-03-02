@@ -73,7 +73,7 @@ export async function connectWallet(): Promise<WalletSession> {
   // Check if MWA native module is available (not in Expo Go)
   if (!isMWAAvailable()) {
     throw new Error(
-      'MWA not available in Expo Go. Use dev connect (long-press logo 3x) or build a dev client.'
+      'MWA not available in Expo Go. Use dev connect (tap logo 3x) or build a dev client.'
     );
   }
 
@@ -112,7 +112,7 @@ export async function connectWallet(): Promise<WalletSession> {
   } catch (err: any) {
     if (err?.message?.includes('MWA not available')) {
       throw new Error(
-        'MWA not available. This happens in Expo Go. Use a Dev Client or long-press the logo 3x for Dev Mode.'
+        'MWA not available. This happens in Expo Go. Use a Dev Client or tap the logo 3x for Dev Mode.'
       );
     }
     throw new Error(
