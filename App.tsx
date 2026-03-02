@@ -19,8 +19,7 @@ import { DEFAULT_RATING, ROLES, UserRole, QUESTIONS_PER_MATCH } from './src/conf
 import { Player, Match, Question, DailyQuest, LeaderboardEntry } from './src/types';
 import { calculateMatchRatings, calculateXP } from './src/services/matchmaking/ratingSystem';
 import { generateQuestionsFromNews, fetchLatestNews } from './src/services/ai/questionGenerator';
-import { getLeaderboard } from './src/services/firebase/firestore';
-import { persistMatchResult } from './src/services/firebase/matchResult';
+import { getLeaderboard, persistMatchResult } from './src/services/db/neon';
 import { createEscrow, depositWager, resolveEscrow } from './src/services/wallet/escrow';
 
 // ─── Screen Type ─────────────────────────────────────────

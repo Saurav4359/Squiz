@@ -150,33 +150,48 @@ export default function ResultsScreen({
 
           {/* Per-question results */}
           <View style={styles.questionResults}>
+            <View style={styles.qHeaderRow}>
+              <Text style={styles.qHeaderLabel}>TIME</Text>
+              <View style={{ width: 36 }} />
+              <Text style={styles.qHeaderLabel}>TIME</Text>
+            </View>
             {match.questions.map((q, i) => {
               const myAnswer = myData.answers.find((a) => a.questionIndex === i);
               const theirAnswer = opponentData.answers.find((a) => a.questionIndex === i);
               return (
                 <View key={i} style={styles.qRow}>
+                  <View style={styles.qSide}>
+                    <Text style={styles.qTime}>
+                      {myAnswer ? (myAnswer.reactionTimeMs / 1000).toFixed(1) : '—'}s
+                    </Text>
+                    <Text
+                      style={[
+                        styles.qResult,
+                        { color: myAnswer?.isCorrect ? colors.primary : colors.danger },
+                      ]}
+                    >
+                      {myAnswer?.isCorrect ? '✓' : '✗'}
+                    </Text>
+                  </View>
                   <Text style={styles.qNum}>Q{i + 1}</Text>
-                  <Text
-                    style={[
-                      styles.qResult,
-                      { color: myAnswer?.isCorrect ? colors.primary : colors.danger },
-                    ]}
-                  >
-                    {myAnswer?.isCorrect ? '✓' : '✗'}
-                  </Text>
-                  <View style={styles.qDivider} />
-                  <Text
-                    style={[
-                      styles.qResult,
-                      { color: theirAnswer?.isCorrect ? colors.primary : colors.danger },
-                    ]}
-                  >
-                    {theirAnswer?.isCorrect ? '✓' : '✗'}
-                  </Text>
+                  <View style={[styles.qSide, styles.qSideRight]}>
+                    <Text
+                      style={[
+                        styles.qResult,
+                        { color: theirAnswer?.isCorrect ? colors.primary : colors.danger },
+                      ]}
+                    >
+                      {theirAnswer?.isCorrect ? '✓' : '✗'}
+                    </Text>
+                    <Text style={styles.qTime}>
+                      {theirAnswer ? (theirAnswer.reactionTimeMs / 1000).toFixed(1) : '—'}s
+                    </Text>
+                  </View>
                 </View>
               );
             })}
           </View>
+
         </Animated.View>
 
         {/* Rating Change */}
@@ -338,32 +353,62 @@ const styles = StyleSheet.create({
 
   // Per-question
   questionResults: {
-    gap: spacing.sm,
+    marginTop: spacing.md,
+    gap: spacing.xs,
+  },
+  qHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingBottom: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    marginBottom: spacing.sm,
+  },
+  qHeaderLabel: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: colors.textDim,
+    letterSpacing: 1,
+    width: 60,
+    textAlign: 'center',
   },
   qRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border + '33',
+  },
+  qSide: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  qSideRight: {
+    justifyContent: 'flex-end',
   },
   qNum: {
     fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
     color: colors.textDim,
-    width: 30,
+    width: 36,
+    textAlign: 'center',
+  },
+  qTime: {
+    fontSize: fontSize.xs,
+    color: colors.textDim,
+    minWidth: 40,
     textAlign: 'center',
   },
   qResult: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    width: 30,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.extrabold,
+    width: 24,
     textAlign: 'center',
   },
-  qDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: colors.border,
-    marginHorizontal: spacing.lg,
-  },
+
 
   // Rating
   ratingChangeRow: {

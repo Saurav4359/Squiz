@@ -10,8 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
 import { Match } from '../types';
-import { collection, query, where, orderBy, limit, getDocs, or } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { getMatchHistory } from '../services/db/neon';
 
 interface MatchHistoryScreenProps {
   playerId: string;
@@ -29,22 +28,15 @@ export default function MatchHistoryScreen({ playerId, onNavigate }: MatchHistor
   const fetchHistory = async () => {
     try {
       setLoading(true);
-      // Query matches where player participated
-      const q = query(
-        collection(db, 'matches'),
-        where('playerA.id', '==', playerId),
-        orderBy('endedAt', 'desc'),
-        limit(20)
-      );
-      const snap = await getDocs(q);
-      const history = snap.docs.map(d => ({ ...d.data(), id: d.id } as Match));
-      setMatches(history);
+      const history = await getMatchHistory(playerId);
+      setMatches(history as Match[]);
     } catch (e) {
       console.warn('[History] Fetch failed:', e);
     } finally {
       setLoading(false);
     }
   };
+
 
   const getMatchResult = (match: Match) => {
     if (!match.winnerId) return 'draw';

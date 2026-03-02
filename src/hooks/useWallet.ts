@@ -9,6 +9,7 @@ import {
   devConnectWallet,
   WalletSession,
 } from '../services/wallet/solanaWallet';
+import { getSolanaWalletBalance } from '../services/explorer/solscan';
 import * as Linking from 'expo-linking';
 import { connectPhantom, handlePhantomConnectRedirect } from '../services/wallet/phantomWallet';
 
@@ -66,10 +67,8 @@ export function useWallet(): UseWalletReturn {
   const refreshBalance = useCallback(async () => {
     if (!address) return;
     try {
-      const [sol, skr] = await Promise.all([
-        getSOLBalance(address),
-        getSKRBalance(address),
-      ]);
+      const sol = await getSolanaWalletBalance(address);
+      const skr = await getSKRBalance(address);
       setBalance({ sol, skr });
     } catch (err) {
       console.warn('[useWallet] Balance fetch failed:', err);
