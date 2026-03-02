@@ -19,6 +19,7 @@ import { DEFAULT_RATING, ROLES, UserRole, QUESTIONS_PER_MATCH } from './src/conf
 import { Player, Match, Question, DailyQuest, LeaderboardEntry } from './src/types';
 import { calculateMatchRatings, calculateXP } from './src/services/matchmaking/ratingSystem';
 import { generateQuestionsFromNews, fetchLatestNews, generateFallbackQuestions } from './src/services/ai/questionGenerator';
+import { filterSeenQuestions, markQuestionsAsSeen } from './src/services/ai/antiCheat';
 import { getLeaderboard, persistMatchResult } from './src/services/db/neon';
 import { createEscrow, depositWager, resolveEscrow } from './src/services/wallet/escrow';
 
@@ -114,18 +115,33 @@ export default function App() {
 
       // Fetch AI questions + simulate matchmaking in parallel
       const startMatch = async () => {
-        // Start with a randomized selection of fallbacks immediately
-        let questions: Question[] = generateFallbackQuestions(role, QUESTIONS_PER_MATCH);
+        // Start with a randomized selection of UNSEEN fallbacks immediately
+        let questions: Question[] = (await filterSeenQuestions(generateFallbackQuestions(role, 20))).slice(0, QUESTIONS_PER_MATCH);
+
+        // If we ran out of unique fallbacks (unlikely), generate some anyway to avoid empty match
+        if (questions.length < QUESTIONS_PER_MATCH) {
+          questions = generateFallbackQuestions(role, QUESTIONS_PER_MATCH);
+        }
 
         try {
           const news = await fetchLatestNews();
-          const aiQuestions = await generateQuestionsFromNews(news, role, QUESTIONS_PER_MATCH);
+          // Ask for more than needed so we have room to filter seen ones
+          let aiQuestions = await generateQuestionsFromNews(news, role, QUESTIONS_PER_MATCH * 2);
+          aiQuestions = await filterSeenQuestions(aiQuestions);
+
           if (aiQuestions.length >= QUESTIONS_PER_MATCH) {
             questions = aiQuestions.slice(0, QUESTIONS_PER_MATCH);
+          } else if (aiQuestions.length > 0) {
+            // Mix unique news with unique fallbacks
+            const uniqueFallbacks = await filterSeenQuestions(generateFallbackQuestions(role, 20));
+            questions = [...aiQuestions, ...uniqueFallbacks].slice(0, QUESTIONS_PER_MATCH);
           }
         } catch (err) {
-          console.warn('[App] AI question gen failed, using dynamic fallbacks:', err);
+          console.warn('[App] AI question gen failed, using existing fallbacks:', err);
         }
+
+        // Mark these as seen so they never appear again for this user
+        await markQuestionsAsSeen(questions);
 
         // Ensure minimum matchmaking time for UX
         await new Promise((r) => setTimeout(r, 3000 + Math.random() * 2000));
