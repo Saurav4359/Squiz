@@ -108,13 +108,15 @@ export default function ConnectWalletScreen({
     }
   }, [isNewUser]);
 
-  const handleLogoLongPress = () => {
+  const handleLogoPress = () => {
     const next = devPressCount + 1;
     setDevPressCount(next);
     if (next >= 3) {
       setDevPressCount(0);
       onDevConnect();
     }
+    // Reset count after 2 seconds of inactivity
+    setTimeout(() => setDevPressCount(0), 2000);
   };
 
   const handleCreateProfile = () => {
@@ -265,8 +267,7 @@ export default function ConnectWalletScreen({
           {renderPulseRing(ring3, 180)}
           <Animated.View style={[styles.logoContainer, { transform: [{ scale: logoScale }] }]}>
             <TouchableOpacity
-              onLongPress={handleLogoLongPress}
-              delayLongPress={500}
+              onPress={handleLogoPress}
               activeOpacity={0.9}
             >
               <LinearGradient

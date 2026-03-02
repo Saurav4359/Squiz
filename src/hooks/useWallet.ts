@@ -97,12 +97,8 @@ export function useWallet(): UseWalletReturn {
       setLabel(session.label);
       setAuthToken(session.authToken);
     } catch (err: any) {
-      const message =
-        err?.message?.includes('No wallet')
-          ? 'No Solana wallet found. Install Phantom or Solflare.'
-          : err?.message?.includes('User rejected')
-          ? 'Connection declined.'
-          : 'Wallet connection failed. Try again.';
+      // Use the specific error message if it exists, otherwise fallback to generic
+      const message = err?.message || 'Wallet connection failed. Try again.';
       setError(message);
       throw err;
     } finally {

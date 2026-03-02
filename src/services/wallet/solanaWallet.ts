@@ -110,11 +110,15 @@ export async function connectWallet(): Promise<WalletSession> {
 
     return session;
   } catch (err: any) {
-    if (err?.message?.includes('MWA not available')) throw err;
+    if (err?.message?.includes('MWA not available')) {
+      throw new Error(
+        'MWA not available. This happens in Expo Go. Use a Dev Client or long-press the logo 3x for Dev Mode.'
+      );
+    }
     throw new Error(
       err?.message?.includes('User rejected')
         ? 'Connection declined by user.'
-        : 'Wallet connection failed. Make sure Phantom or Solflare is installed.'
+        : 'Wallet connection failed. Install Phantom or Solflare on this device.'
     );
   }
 }
