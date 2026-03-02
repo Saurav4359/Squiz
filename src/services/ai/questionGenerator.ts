@@ -43,23 +43,26 @@ Return a JSON object with a "questions" array. No other text.`,
           },
           {
             role: 'user',
-            content: `Generate ${count} quiz questions for the "${role}" category.
+            content: `Generate ${count} ORIGINAL quiz questions for the "${role}" category.
+            
+            IMPORTANT: Use the LATEST developments and news items provided below. Do NOT repeat basic facts (like "what is SOL") unless there is a new update about it. Focus on recent news, TVL changes, trending tokens, or blog updates.
 
-Use this context about current Web3/Solana:
-${newsText}
-
-Return EXACTLY this JSON format:
-{
-  "questions": [
-    {
-      "question": "Which DEX aggregator is largest on Solana?",
-      "options": ["Jupiter", "Uniswap", "PancakeSwap", "1inch"],
-      "correctIndex": 0,
-      "difficulty": 2
-    }
-  ]
-}`,
+            Context about current Web3/Solana:
+            ${newsText}
+            
+            Return EXACTLY this JSON format:
+            {
+              "questions": [
+                {
+                  "question": "Which DEX aggregator is largest on Solana?",
+                  "options": ["Jupiter", "Uniswap", "PancakeSwap", "1inch"],
+                  "correctIndex": 0,
+                  "difficulty": 2
+                }
+              ]
+            }`,
           },
+
         ],
         temperature: 0.7,
         max_tokens: 4096,
@@ -142,6 +145,24 @@ function validateOptions(opts: any): [string, string, string, string] {
 export async function fetchLatestNews(): Promise<string[]> {
   const newsItems: string[] = [];
 
+  // Solana Blog via RSS2JSON (Solana Blogs source)
+  try {
+    const rssUrls = [
+      'https://solana.com/news/rss',
+      'https://solana.com/blog/rss'
+    ];
+    const url = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrls[Math.floor(Math.random() * rssUrls.length)])}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (res.ok) {
+      const data = await res.json();
+      (data.items?.slice(0, 8) || []).forEach((item: any) => {
+        newsItems.push(`NEWS: ${item.title} - ${item.description?.slice(0, 100)}...`);
+      });
+    }
+  } catch (e) {
+    console.warn('[News] RSS fetch failed:', e);
+  }
+
   // CoinGecko trending
   try {
     const res = await fetch('https://api.coingecko.com/api/v3/search/trending', {
@@ -151,13 +172,11 @@ export async function fetchLatestNews(): Promise<string[]> {
       const data = await res.json();
       (data.coins?.slice(0, 5) || []).forEach((coin: any) => {
         newsItems.push(
-          `Trending: ${coin.item.name} (${coin.item.symbol}) – rank #${coin.item.market_cap_rank}`
+          `Trending Coin: ${coin.item.name} (${coin.item.symbol}) - Market Cap Rank: #${coin.item.market_cap_rank}`
         );
       });
     }
-  } catch {
-    // skip
-  }
+  } catch { /* skip */ }
 
   // DeFiLlama Solana TVL
   try {
@@ -168,61 +187,50 @@ export async function fetchLatestNews(): Promise<string[]> {
       const chains = await res.json();
       const solana = chains.find((c: any) => c.name === 'Solana');
       if (solana) {
-        newsItems.push(`Solana TVL: $${(solana.tvl / 1e9).toFixed(2)}B`);
+        newsItems.push(`Current Solana TVL: $${(solana.tvl / 1e9).toFixed(2)}B`);
       }
     }
-  } catch {
-    // skip
-  }
+  } catch { /* skip */ }
 
-  // SOL price from CoinGecko
-  try {
-    const res = await fetch(
-      'https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd&include_24hr_change=true',
-      { signal: AbortSignal.timeout(5000) }
-    );
-    if (res.ok) {
-      const data = await res.json();
-      if (data.solana) {
-        newsItems.push(
-          `SOL price: $${data.solana.usd} (${data.solana.usd_24h_change?.toFixed(1)}% 24h)`
-        );
-      }
-    }
-  } catch {
-    // skip
-  }
+  // Evergreen Solana knowledge (shuffled and limited)
+  const evergreen = [
+    'Jupiter is the #1 DEX aggregator on Solana leading in volume and innovation',
+    'Solana Seeker is the 2nd-gen crypto phone featuring Seed Vault and dApp store',
+    'SKR token coordinates the Solana Mobile ecosystem and participation',
+    'Mobile Wallet Adapter (MWA) 2.0 is the standard for mobile dapp connections',
+    'Solana handles 4000+ real-time TPS with sub-second finality using PoH',
+    'Marinade Finance and Jito lead the liquid staking and MEV landscape on Solana',
+    'Helius and Triton provide critical RPC and data infrastructure for developers',
+    'Tensor and Magic Eden dominate the Solana NFT marketplace volume',
+    'Phantom and Solflare are the most used wallets in the Solana ecosystem',
+    'Compressed NFTs (cNFTs) use state compression to reduce minting costs',
+    'Solana Sealevel allows parallel execution of thousands of smart contracts',
+    'Helium and Hivemapper are key DePIN projects successfully scaled on Solana',
+    'Metaplex Core is the newest NFT standard for optimized performance',
+    'Pyth Network delivers institutional-grade price feeds to Solana DeFi',
+    'Firedancer is the new independent validator client being developed by Jump Crypto',
+    'Solana Actions and Blinks allow crypto transactions on any website or social media',
+    'The Solana Foundation supports ecosystem growth through grants and hackathons',
+    'Twitter Pulse: High interest in Solana L2s vs Sidechains debate and SVM expansion',
+    'Twitter Pulse: Discussions on "The Real SOL" and upcoming breakpoint conference features',
+    'Twitter Pulse: Growing community adoption of Blinks for NFT mints on X (formerly Twitter)',
+  ];
 
-  // Evergreen Solana knowledge base
-  newsItems.push(
-    'Jupiter is the #1 DEX aggregator on Solana processing billions in volume',
-    'Solana Seeker is the 2nd-gen crypto phone with Seed Vault hardware security',
-    'SKR token is the Solana Mobile coordination layer for governance and staking',
-    'Mobile Wallet Adapter (MWA) 2.0 enables wallet connections on Android',
-    'Solana dApp Store has 225+ published apps with zero listing fees',
-    'Solana handles 4000+ TPS with sub-second finality, using Proof of History',
-    'Marinade Finance is the leading liquid staking protocol on Solana',
-    'Helius provides RPC infrastructure and DAS API for Solana developers',
-    'Tensor is the top NFT marketplace on Solana by trading volume',
-    'Phantom wallet has 10M+ users, the most popular Solana wallet',
-    'Compressed NFTs on Solana reduce minting costs by 99.9%',
-    'Raydium and Orca are the two main AMMs on Solana',
-    'Solana staking yields ~7-8% APY through validators',
-    'Jito is the leading MEV protocol on Solana',
-    'Pyth Network provides real-time price feeds on Solana',
-    'Wormhole connects Solana to 30+ other blockchains',
-    'Solana uses the Sealevel runtime for parallel transaction processing',
-    'Helium migrated its entire network from its own chain to Solana',
-    'Metaplex provides NFT standards and tools on Solana',
-    'Switchboard provides decentralized oracle services on Solana',
-  );
 
-  return newsItems;
+  // Pick 5 random evergreen facts to keep base knowledge fresh
+  const randomEvergreen = evergreen
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 6);
+  
+  newsItems.push(...randomEvergreen);
+
+  // Final shuffle of all news items to prevent AI pattern bias
+  return newsItems.sort(() => Math.random() - 0.5);
 }
 
 // ─── Fallback questions (offline / API failure) ──────────
 
-function generateFallbackQuestions(role: UserRole, count: number): Question[] {
+export function generateFallbackQuestions(role: UserRole, count: number): Question[] {
   const now = Date.now();
   const pool = FALLBACK_POOL.filter(
     (q) => q.role === role || q.role === 'General'

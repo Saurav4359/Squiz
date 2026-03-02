@@ -18,7 +18,7 @@ import { colors, fontSize, fontWeight, spacing } from './src/config/theme';
 import { DEFAULT_RATING, ROLES, UserRole, QUESTIONS_PER_MATCH } from './src/config/constants';
 import { Player, Match, Question, DailyQuest, LeaderboardEntry } from './src/types';
 import { calculateMatchRatings, calculateXP } from './src/services/matchmaking/ratingSystem';
-import { generateQuestionsFromNews, fetchLatestNews } from './src/services/ai/questionGenerator';
+import { generateQuestionsFromNews, fetchLatestNews, generateFallbackQuestions } from './src/services/ai/questionGenerator';
 import { getLeaderboard, persistMatchResult } from './src/services/db/neon';
 import { createEscrow, depositWager, resolveEscrow } from './src/services/wallet/escrow';
 
@@ -33,69 +33,7 @@ type Screen =
   | 'quests'
   | 'history';
 
-// ─── Fallback Questions (until Groq pipeline is wired) ──
-const FALLBACK_QUESTIONS: Question[] = [
-  {
-    id: 'fq1',
-    question: 'Which DEX is the largest aggregator on Solana?',
-    options: ['Jupiter', 'Orca', 'Raydium', 'Tensor'],
-    correctIndex: 0,
-    role: 'Trader',
-    difficulty: 2,
-    sourceDate: Date.now(),
-    sourceSummary: 'Solana DEX ecosystem',
-    createdAt: Date.now(),
-    expiresAt: Date.now() + 7 * 86400000,
-  },
-  {
-    id: 'fq2',
-    question: "What is Solana's consensus mechanism called?",
-    options: ['Proof of Work', 'Proof of History', 'Proof of Stake', 'Delegated PoS'],
-    correctIndex: 1,
-    role: 'Developer',
-    difficulty: 1,
-    sourceDate: Date.now(),
-    sourceSummary: 'Solana architecture',
-    createdAt: Date.now(),
-    expiresAt: Date.now() + 7 * 86400000,
-  },
-  {
-    id: 'fq3',
-    question: 'What hardware security does the Seeker device use?',
-    options: ['Secure Element', 'Seed Vault', 'TPM Chip', 'Knox'],
-    correctIndex: 1,
-    role: 'Trader',
-    difficulty: 2,
-    sourceDate: Date.now(),
-    sourceSummary: 'Solana Mobile Seeker',
-    createdAt: Date.now(),
-    expiresAt: Date.now() + 7 * 86400000,
-  },
-  {
-    id: 'fq4',
-    question: 'What is the SPL token standard similar to on Ethereum?',
-    options: ['ERC-20', 'ERC-721', 'ERC-1155', 'BEP-20'],
-    correctIndex: 0,
-    role: 'Developer',
-    difficulty: 1,
-    sourceDate: Date.now(),
-    sourceSummary: 'Solana token standards',
-    createdAt: Date.now(),
-    expiresAt: Date.now() + 7 * 86400000,
-  },
-  {
-    id: 'fq5',
-    question: 'Which wallet is the most popular on Solana?',
-    options: ['MetaMask', 'Phantom', 'Solflare', 'Trust Wallet'],
-    correctIndex: 1,
-    role: 'Beginner',
-    difficulty: 1,
-    sourceDate: Date.now(),
-    sourceSummary: 'Solana ecosystem',
-    createdAt: Date.now(),
-    expiresAt: Date.now() + 7 * 86400000,
-  },
-];
+// ─── Fallback handling moved to ai service ──────────────
 
 export default function App() {
   // ─── Hooks ─────────────────────────────────────────────
@@ -176,7 +114,8 @@ export default function App() {
 
       // Fetch AI questions + simulate matchmaking in parallel
       const startMatch = async () => {
-        let questions: Question[] = FALLBACK_QUESTIONS.slice(0, QUESTIONS_PER_MATCH);
+        // Start with a randomized selection of fallbacks immediately
+        let questions: Question[] = generateFallbackQuestions(role, QUESTIONS_PER_MATCH);
 
         try {
           const news = await fetchLatestNews();
@@ -185,7 +124,7 @@ export default function App() {
             questions = aiQuestions.slice(0, QUESTIONS_PER_MATCH);
           }
         } catch (err) {
-          console.warn('[App] AI question gen failed, using fallbacks:', err);
+          console.warn('[App] AI question gen failed, using dynamic fallbacks:', err);
         }
 
         // Ensure minimum matchmaking time for UX
@@ -316,7 +255,7 @@ export default function App() {
             ...prev,
             playerA: updatedA,
             playerB: updatedB,
-            currentQuestionIndex: nextIdx,
+            currentQuestionIndex: prev.currentQuestionIndex, // Keep on last question to show feedback
             status: 'finished' as const,
             winnerId,
             endedAt: Date.now(),
@@ -339,9 +278,10 @@ export default function App() {
           }).then(() => authHook.refreshPlayer())
             .catch(e => console.warn('[App] Match persist failed:', e));
 
-          setTimeout(() => setCurrentScreen('results'), 2000);
+          setTimeout(() => setCurrentScreen('results'), 3000);
           return finalMatch;
         }
+
 
         setTimeout(() => {
           setCurrentMatch((m) =>

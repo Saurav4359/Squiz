@@ -47,11 +47,15 @@ export default function BattleScreen({
     setQuestionStartTime(Date.now());
 
     timerAnim.setValue(1);
+    flashAnim.setValue(0);
+    scaleAnim.setValue(0.5);
+
     Animated.timing(timerAnim, {
       toValue: 0,
       duration: SECONDS_PER_QUESTION * 1000,
       useNativeDriver: false,
     }).start();
+
 
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
@@ -90,18 +94,19 @@ export default function BattleScreen({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
 
-    // Flash animation
-    Animated.sequence([
+    // Animations
+    Animated.parallel([
       Animated.timing(flashAnim, {
         toValue: 1,
-        duration: 200,
-        useNativeDriver: false,
+        duration: 400,
+        useNativeDriver: true,
       }),
-      Animated.timing(flashAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: false,
-      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 6,
+        tension: 40,
+        useNativeDriver: true,
+      })
     ]).start();
 
     onAnswer(match.currentQuestionIndex, optionIndex, reactionTime);
@@ -153,12 +158,15 @@ export default function BattleScreen({
         style={[
           styles.flashOverlay,
           {
-            opacity: flashAnim,
+            opacity: flashAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 0.4],
+            }),
             backgroundColor:
               selectedAnswer !== null &&
               selectedAnswer === currentQuestion?.correctIndex
-                ? colors.primaryDim
-                : colors.dangerDim,
+                ? colors.primary
+                : colors.danger,
           },
         ]}
         pointerEvents="none"
@@ -234,7 +242,21 @@ export default function BattleScreen({
 
       {/* Result Flash */}
       {showResult && (
-        <View style={styles.resultFlash}>
+        <Animated.View 
+          style={[
+            styles.resultFlash,
+            {
+              transform: [
+                { scale: scaleAnim },
+                { translateY: flashAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }
+              ],
+              opacity: flashAnim
+            }
+          ]}
+        >
+          {match.status === 'finished' && (
+            <Text style={styles.finalMatchText}>MATCH FINISHED</Text>
+          )}
           <Text style={styles.resultEmoji}>
             {selectedAnswer === currentQuestion?.correctIndex ? '✅' : '❌'}
           </Text>
@@ -256,8 +278,9 @@ export default function BattleScreen({
           <Text style={styles.resultTime}>
             {((Date.now() - questionStartTime) / 1000).toFixed(1)}s
           </Text>
-        </View>
+        </Animated.View>
       )}
+
     </View>
   );
 }
@@ -441,7 +464,27 @@ const styles = StyleSheet.create({
   resultFlash: {
     alignItems: 'center',
     marginTop: spacing.xxl,
+    padding: spacing.xl,
+    backgroundColor: colors.bgCard,
+    borderRadius: borderRadius.lg,
+    marginHorizontal: spacing.xxl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
   },
+  finalMatchText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.primary,
+    letterSpacing: 3,
+    marginBottom: spacing.md,
+    textTransform: 'uppercase',
+  },
+
   resultEmoji: {
     fontSize: 36,
   },
