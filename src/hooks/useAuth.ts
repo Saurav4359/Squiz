@@ -1,8 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
-import { createPlayer, getPlayer, updatePlayer } from '../services/firebase/firestore';
+import { createPlayer, getPlayer, updatePlayer, getDailyQuests } from '../services/db/neon';
 import { Player, DailyQuest } from '../types';
 import { UserRole, DEFAULT_RATING, ROLES } from '../config/constants';
-import { getDailyQuests } from '../services/firebase/firestore';
 
 export interface UseAuthReturn {
   player: Player | null;
