@@ -71,36 +71,14 @@ export function calculateDrawRatings(
  */
 export function calculateXP(
   won: boolean,
-  correctAnswers: number,
-  totalQuestions: number,
-  avgReactionTimeMs: number,
-  isSkrStaker: boolean,
-  streakDays: number
+  _correctAnswers: number,
+  _totalQuestions: number,
+  _avgReactionTimeMs: number,
+  _isSkrStaker: boolean,
+  _streakDays: number
 ): number {
-  let xp = 0;
-
-  // Base XP
-  xp += won ? 75 : 15;
-
-  // Accuracy bonus
-  const accuracy = correctAnswers / totalQuestions;
-  if (accuracy >= 1.0) xp += 50;      // Perfect
-  else if (accuracy >= 0.8) xp += 30;  // Great
-  else if (accuracy >= 0.6) xp += 15;  // Good
-
-  // Speed bonus
-  if (avgReactionTimeMs < 2000) xp += 25;      // Lightning fast
-  else if (avgReactionTimeMs < 3500) xp += 10;  // Quick
-
-  // Streak bonus (caps at 10 days)
-  xp += Math.min(streakDays, 10) * 5;
-
-  // SKR staker multiplier
-  if (isSkrStaker) {
-    xp = Math.round(xp * 1.5);
-  }
-
-  return xp;
+  // STRICT REWARDS: Exactly 20 for win, 5 for loss as requested
+  return won ? 20 : 5;
 }
 
 /**

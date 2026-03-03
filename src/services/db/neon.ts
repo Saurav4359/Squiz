@@ -1,6 +1,7 @@
 import { neon } from '@neondatabase/serverless';
 import { Player, DailyQuest } from '../../types';
 import { UserRole, ROLES } from '../../config/constants';
+import { calculateLevel } from '../matchmaking/ratingSystem';
 
 // For development, ensure you define EXPO_PUBLIC_DATABASE_URL in .env
 const DATABASE_URL = process.env.EXPO_PUBLIC_DATABASE_URL || 'postgresql://neondb_owner:npg_vi0wBxOmL5Vu@ep-billowing-hill-aiaqq84o-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
@@ -24,10 +25,24 @@ async function ensureTables() {
           matchesPlayed INTEGER DEFAULT 0,
           wins INTEGER DEFAULT 0,
           losses INTEGER DEFAULT 0,
+          xp INTEGER DEFAULT 0,
+          isSkrStaker BOOLEAN DEFAULT FALSE,
+          skrBalance DECIMAL DEFAULT 0,
           createdAt BIGINT,
           lastActiveAt BIGINT
       );
     `;
+    
+    // Migrations for existing tables (won't affect NEW tables but fixes OLD ones)
+    try {
+      await sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0`;
+      await sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS isskrstaker BOOLEAN DEFAULT FALSE`;
+      await sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS skrbalance DECIMAL DEFAULT 0`;
+      await sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS role_ratings JSONB DEFAULT '{}'::jsonb`;
+    } catch (err) {
+      console.warn('[Neon] Migration: players columns already exist or failed:', err);
+    }
+
     await sql`
       CREATE TABLE IF NOT EXISTS dailyquests (
           id SERIAL PRIMARY KEY,
@@ -53,6 +68,25 @@ async function ensureTables() {
           endedAt BIGINT
       );
     `;
+    
+    // Seed some legendary bot players for the leaderboard if table is empty
+    const playerCount = await sql`SELECT count(*) FROM players`;
+    if (playerCount[0].count === '0') {
+      const bots = [
+        { u: 'SolWarrior', r: 'Trader', rt: 2600, x: 5000 },
+        { u: 'HeliusHacker', r: 'Developer', rt: 2450, x: 4200 },
+        { u: 'TensorTitan', r: 'NFT Collector', rt: 2380, x: 3800 },
+        { u: 'JupiterJuggernaut', r: 'Trader', rt: 2100, x: 2500 },
+        { u: 'PhantomPilot', r: 'DeFi User', rt: 1950, x: 1800 },
+        { u: 'MeteoraMind', r: 'Researcher', rt: 1800, x: 1200 },
+      ];
+      for (const bot of bots) {
+        await sql`
+          INSERT INTO players (walletAddress, username, primaryRole, rating, xp, role_ratings)
+          VALUES (${'bot_' + bot.u}, ${bot.u}, ${bot.r}, ${bot.rt}, ${bot.x}, ${JSON.stringify({ [bot.r]: bot.rt })})
+        `;
+      }
+    }
   } catch (e) {
     console.error('[Neon] Table initialization failed:', e);
   }
@@ -66,30 +100,34 @@ export async function getPlayer(walletAddress: string): Promise<Player | null> {
   if (result.length === 0) return null;
   
   const p = result[0];
-  const defaultRatings = {
-      [ROLES[0]]: 1200,
-      [ROLES[1]]: 1200,
-      [ROLES[2]]: 1200,
-  } as Record<UserRole, number>;
+  const roleRatings = p.role_ratings || {};
+  const ratings: Record<UserRole, number> = {} as any;
+  ROLES.forEach(r => {
+    ratings[r] = roleRatings[r] ? Number(roleRatings[r]) : 1200;
+  });
+  // Ensure primary role has something
+  if (ratings[p.primaryrole as UserRole] === 1200 && p.rating) {
+      ratings[p.primaryrole as UserRole] = p.rating;
+  }
 
   return {
-    id: p.id,
+    id: String(p.id),
     walletAddress: p.walletaddress,
     seekerId: p.seekerid,
     username: p.username,
     roles: [p.primaryrole as UserRole],
     primaryRole: p.primaryrole as UserRole,
-    ratings: defaultRatings,
-    xp: 0,
-    level: 1,
+    ratings,
+    xp: p.xp || 0,
+    level: calculateLevel(p.xp || 0),
     matchesPlayed: p.matchesplayed || 0,
     matchesWon: p.wins || 0,
     currentStreak: 0,
     bestStreak: 0,
     avgReactionTime: 0,
     badges: [],
-    isSkrStaker: false,
-    skrBalance: 0,
+    isSkrStaker: p.isskrstaker || false,
+    skrBalance: Number(p.skrbalance) || 0,
     createdAt: Number(p.createdat) || Date.now(),
     lastActiveAt: Number(p.lastactiveat) || Date.now(),
   };
@@ -114,30 +152,28 @@ export async function createPlayer(
   `;
   
   const p = result[0];
-  const defaultRatings = {
-      [ROLES[0]]: 1200,
-      [ROLES[1]]: 1200,
-      [ROLES[2]]: 1200,
-  } as Record<UserRole, number>;
+  const ratings: Record<UserRole, number> = {} as any;
+  ROLES.forEach(r => ratings[r] = 1200);
+  ratings[p.primaryrole as UserRole] = p.rating || 1200;
 
   return {
-    id: p.id,
+    id: String(p.id),
     walletAddress: p.walletaddress,
     seekerId: p.seekerid,
     username: p.username,
     roles: [p.primaryrole as UserRole],
     primaryRole: p.primaryrole as UserRole,
-    ratings: defaultRatings,
-    xp: 0,
-    level: 1,
+    ratings,
+    xp: p.xp || 0,
+    level: calculateLevel(p.xp || 0),
     matchesPlayed: p.matchesplayed || 0,
     matchesWon: p.wins || 0,
     currentStreak: 0,
     bestStreak: 0,
     avgReactionTime: 0,
     badges: [],
-    isSkrStaker: false,
-    skrBalance: 0,
+    isSkrStaker: p.isskrstaker || false,
+    skrBalance: Number(p.skrbalance) || 0,
     createdAt: Number(p.createdat) || Date.now(),
     lastActiveAt: Number(p.lastactiveat) || Date.now(),
   };
@@ -186,27 +222,28 @@ export async function getDailyQuests(walletAddress: string): Promise<DailyQuest[
 // ─── Leaderboard Functions ────────────────────────────────────
 export async function getLeaderboard(role: UserRole): Promise<any[]> {
   await ensureTables();
-  // In a real implementation, we would query the players table and sort by rating in the specific role.
-  // For now, we'll sort by the main rating column for simplicity.
+  // Only show players who have a rating for this specific role
   const result = await sql`
-    SELECT id, username, rating, wins, matchesPlayed
+    SELECT id, username, (role_ratings->>${role})::int as r_val, wins, matchesplayed, isskrstaker
     FROM players 
-    ORDER BY rating DESC 
+    WHERE role_ratings ? ${role}
+    ORDER BY r_val DESC 
     LIMIT 20
   `;
   
   return result.map((p: any, index: number) => ({
     rank: index + 1,
-    playerId: p.id,
+    playerId: String(p.id),
     username: p.username,
-    rating: p.rating || 1200,
-    winRate: p.matchesplayed > 0 ? (p.wins / p.matchesplayed) * 100 : 0,
+    rating: p.r_val || 1200,
+    winRate: p.matchesplayed > 0 ? Math.round((Number(p.wins) / Number(p.matchesplayed)) * 100) : 0,
     matchesPlayed: p.matchesplayed || 0,
-    avgReactionTime: 2500, // Placeholder
-    isSkrStaker: false,
+    avgReactionTime: 1800,
+    isSkrStaker: p.isskrstaker || false,
     isCurrentUser: false,
   }));
 }
+
 
 // ─── Match Persistence ────────────────────────────────────────
 export async function persistMatchResult(data: any): Promise<void> {
@@ -221,24 +258,32 @@ export async function persistMatchResult(data: any): Promise<void> {
   } = data;
 
   // 1. Find the player by ID
-  const players = await sql`SELECT * FROM players WHERE id = ${currentPlayerId}`;
+  const pId = Number(currentPlayerId);
+  const players = await sql`SELECT * FROM players WHERE id = ${pId}`;
   if (players.length === 0) return;
   const player = players[0];
 
   // 2. Calculate new stats
   const newMatchesPlayed = (player.matchesplayed || 0) + 1;
   const newWins = (player.wins || 0) + (isWin ? 1 : 0);
-  const newRating = ratingResult.playerNewRating;
+  
+  // FIX: ratingResult contains winnerNewRating/loserNewRating, not playerNewRating
+  const newRating = isWin ? ratingResult.winnerNewRating : ratingResult.loserNewRating;
+  const newXP = (player.xp || 0) + xpEarned;
 
   // 3. Update player record
+  // Use explicit casting and ensure columns exist
+  // We update both the global rating AND the role-specific rating
   await sql`
     UPDATE players 
     SET 
       rating = ${newRating},
-      matchesPlayed = ${newMatchesPlayed},
+      role_ratings = jsonb_set(COALESCE(role_ratings, '{}'::jsonb), ARRAY[${role}], ${String(newRating)}::jsonb),
+      matchesplayed = ${newMatchesPlayed},
       wins = ${newWins},
-      lastActiveAt = ${Date.now()}
-    WHERE id = ${currentPlayerId}
+      xp = ${newXP},
+      lastactiveat = ${Date.now()}
+    WHERE id = ${Number(currentPlayerId)}
   `;
 
   // 4. Record the match (if matches table exists)

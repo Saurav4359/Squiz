@@ -22,9 +22,10 @@ interface ProfileScreenProps {
   onNavigate: (screen: string) => void;
   walletBalance?: { sol: number; skr: number };
   onDisconnect?: () => void;
+  onUpdatePlayer?: (data: Partial<Player>) => Promise<void>;
 }
 
-export default function ProfileScreen({ player, onNavigate, walletBalance, onDisconnect }: ProfileScreenProps) {
+export default function ProfileScreen({ player, onNavigate, walletBalance, onDisconnect, onUpdatePlayer }: ProfileScreenProps) {
   const level = calculateLevel(player.xp);
   const xpProgress = getXPForNextLevel(player.xp);
 
@@ -208,6 +209,23 @@ export default function ProfileScreen({ player, onNavigate, walletBalance, onDis
               activeOpacity={0.7}
             >
               <Text style={styles.disconnectText}>Disconnect Wallet</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Join Champions Simulation */}
+          {!player.isSkrStaker && walletBalance && walletBalance.skr > 0 && onUpdatePlayer && (
+            <TouchableOpacity
+              style={styles.stakeButton}
+              onPress={() => onUpdatePlayer({ isSkrStaker: true })}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#8A2BE2', '#4B0082']}
+                style={styles.stakeGradient}
+              >
+                <Text style={styles.stakeText}>💎 Join Seeker Champions</Text>
+                <Text style={styles.stakeSub}>Stake your SKR for 1.5x XP</Text>
+              </LinearGradient>
             </TouchableOpacity>
           )}
         </View>
@@ -468,6 +486,25 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.danger,
     fontWeight: fontWeight.semibold,
+  },
+  stakeButton: {
+    marginTop: spacing.xl,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  stakeGradient: {
+    padding: spacing.lg,
+    alignItems: 'center',
+  },
+  stakeText: {
+    color: '#fff',
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+  },
+  stakeSub: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 10,
+    marginTop: 4,
   },
 
   // Bottom nav

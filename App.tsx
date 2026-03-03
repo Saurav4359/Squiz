@@ -20,7 +20,7 @@ import { Player, Match, Question, DailyQuest, LeaderboardEntry } from './src/typ
 import { calculateMatchRatings, calculateXP } from './src/services/matchmaking/ratingSystem';
 import { generateQuestionsFromNews, fetchLatestNews, generateFallbackQuestions } from './src/services/ai/questionGenerator';
 import { filterSeenQuestions, markQuestionsAsSeen } from './src/services/ai/antiCheat';
-import { getLeaderboard, persistMatchResult } from './src/services/db/neon';
+import { getLeaderboard, persistMatchResult, updatePlayer } from './src/services/db/neon';
 import { createEscrow, depositWager, resolveEscrow } from './src/services/wallet/escrow';
 
 // ─── Screen Type ─────────────────────────────────────────
@@ -49,12 +49,17 @@ export default function App() {
   const [ratingResult, setRatingResult] = useState<any>(null);
   const [xpEarned, setXpEarned] = useState(0);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardCache, setLeaderboardCache] = useState<Record<string, LeaderboardEntry[]>>({});
   const [appReady, setAppReady] = useState(false);
 
   // ─── Wallet → Auth bridge ─────────────────────────────
   useEffect(() => {
     if (wallet.connected && wallet.address) {
-      authHook.signIn(wallet.address).catch((err) => {
+      authHook.signIn(wallet.address).then(() => {
+        if (authHook.player?.primaryRole) {
+          setSelectedRole(authHook.player.primaryRole);
+        }
+      }).catch((err) => {
         console.error('[App] Auth sign-in failed:', err);
       });
     }
@@ -67,21 +72,36 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Fetch leaderboard when entering that screen
+  // Fetch leaderboard with caching and race condition prevention
   useEffect(() => {
     if (currentScreen === 'leaderboard' && authHook.player) {
-      getLeaderboard(selectedRole)
+      let isCancelled = false;
+      const role = selectedRole;
+
+      // 1. Instant cache hit for snappy switching
+      if (leaderboardCache[role]) {
+        setLeaderboardEntries(leaderboardCache[role]);
+      } else {
+        setLeaderboardEntries([]); // Only clear if we don't have it cached
+      }
+      
+      getLeaderboard(role)
         .then((entries) => {
-          // Mark current user
-          const marked = entries.map((e) => ({
+          if (isCancelled) return;
+          
+          const marked = entries.map((e: LeaderboardEntry) => ({
             ...e,
-            isCurrentUser: e.playerId === authHook.player?.id,
+            isCurrentUser: String(e.playerId) === String(authHook.player?.id),
           }));
+
+          setLeaderboardCache(prev => ({ ...prev, [role]: marked }));
           setLeaderboardEntries(marked);
         })
         .catch((err) => {
-          console.warn('[App] Leaderboard fetch failed:', err);
+          if (!isCancelled) console.warn('[App] Leaderboard fetch failed:', err);
         });
+
+      return () => { isCancelled = true; };
     }
   }, [currentScreen, selectedRole]);
 
@@ -325,8 +345,8 @@ export default function App() {
     setCurrentScreen('home');
   }, []);
 
-  const handleLeaderboardRoleChange = useCallback((_role: UserRole) => {
-    // Will trigger the useEffect for leaderboard refetch
+  const handleLeaderboardRoleChange = useCallback((role: UserRole) => {
+    setSelectedRole(role);
   }, []);
 
   // ─── Loading splash ────────────────────────────────────
@@ -413,6 +433,7 @@ export default function App() {
           <LeaderboardScreen
             entries={leaderboardEntries}
             currentPlayerId={player.id}
+            selectedRole={selectedRole}
             onNavigate={handleNavigate}
             onRoleChange={handleLeaderboardRoleChange}
           />
@@ -426,6 +447,10 @@ export default function App() {
             onDisconnect={async () => {
               await wallet.disconnect();
               authHook.signOut();
+            }}
+            onUpdatePlayer={async (data) => {
+              await updatePlayer(player.walletAddress, data);
+              await authHook.refreshPlayer();
             }}
           />
         );
