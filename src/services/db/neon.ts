@@ -25,7 +25,7 @@ async function ensureTables() {
           matchesPlayed INTEGER DEFAULT 0,
           wins INTEGER DEFAULT 0,
           losses INTEGER DEFAULT 0,
-          xp INTEGER DEFAULT 0,
+          xp DECIMAL DEFAULT 0,
           isSkrStaker BOOLEAN DEFAULT FALSE,
           skrBalance DECIMAL DEFAULT 0,
           createdAt BIGINT,
@@ -35,12 +35,12 @@ async function ensureTables() {
     
     // Migrations for existing tables (won't affect NEW tables but fixes OLD ones)
     try {
-      await sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0`;
+      await sql`ALTER TABLE players ALTER COLUMN xp TYPE DECIMAL`;
       await sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS isskrstaker BOOLEAN DEFAULT FALSE`;
       await sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS skrbalance DECIMAL DEFAULT 0`;
       await sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS role_ratings JSONB DEFAULT '{}'::jsonb`;
     } catch (err) {
-      console.warn('[Neon] Migration: players columns already exist or failed:', err);
+      console.warn('[Neon] Migration: players columns update failed or already done:', err);
     }
 
     await sql`
@@ -130,8 +130,8 @@ export async function getPlayer(walletAddress: string): Promise<Player | null> {
     roles: [p.primaryrole as UserRole],
     primaryRole: p.primaryrole as UserRole,
     ratings,
-    xp: p.xp || 0,
-    level: calculateLevel(p.xp || 0),
+    xp: Number(p.xp) || 0,
+    level: calculateLevel(Number(p.xp) || 0),
     matchesPlayed: p.matchesplayed || 0,
     matchesWon: p.wins || 0,
     currentStreak: 0,
@@ -176,8 +176,8 @@ export async function createPlayer(
     roles: [p.primaryrole as UserRole],
     primaryRole: p.primaryrole as UserRole,
     ratings,
-    xp: p.xp || 0,
-    level: calculateLevel(p.xp || 0),
+    xp: Number(p.xp) || 0,
+    level: calculateLevel(Number(p.xp) || 0),
     matchesPlayed: p.matchesplayed || 0,
     matchesWon: p.wins || 0,
     currentStreak: 0,

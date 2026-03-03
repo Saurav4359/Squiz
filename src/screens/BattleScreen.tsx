@@ -33,68 +33,30 @@ export default function BattleScreen({
   const timerAnim = useRef(new Animated.Value(1)).current;
   const flashAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const timerIntervalRef = useRef<any>(null);
+  const hasAnsweredRef = useRef(false);
 
   const currentQuestion = match.questions[match.currentQuestionIndex];
   const isPlayerA = match.playerA.id === currentPlayerId;
   const myData = isPlayerA ? match.playerA : match.playerB;
   const opponentData = isPlayerA ? match.playerB : match.playerA;
 
-  // Timer countdown
-  useEffect(() => {
-    setTimeLeft(SECONDS_PER_QUESTION);
-    setSelectedAnswer(null);
-    setShowResult(false);
-    setQuestionStartTime(Date.now());
-
-    timerAnim.setValue(1);
-    flashAnim.setValue(0);
-    scaleAnim.setValue(0.5);
-
-    Animated.timing(timerAnim, {
-      toValue: 0,
-      duration: SECONDS_PER_QUESTION * 1000,
-      useNativeDriver: false,
-    }).start();
-
-
-    const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          handleTimeout();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [match.currentQuestionIndex]);
-
-  const handleTimeout = useCallback(() => {
-    if (selectedAnswer === null) {
-      onAnswer(match.currentQuestionIndex, -1, SECONDS_PER_QUESTION * 1000);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+  const stopTimer = useCallback(() => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
     }
-  }, [selectedAnswer, match.currentQuestionIndex]);
+    timerAnim.stopAnimation();
+  }, []);
 
-  const handleSelectAnswer = (optionIndex: number) => {
-    if (selectedAnswer !== null) return; // Already answered
-
-    const reactionTime = Date.now() - questionStartTime;
-    setSelectedAnswer(optionIndex);
+  const triggerFeedback = useCallback((isCorrect: boolean) => {
     setShowResult(true);
-
-    const isCorrect = optionIndex === currentQuestion.correctIndex;
-
-    // Haptic feedback
     if (isCorrect) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
 
-    // Animations
     Animated.parallel([
       Animated.timing(flashAnim, {
         toValue: 1,
@@ -108,8 +70,74 @@ export default function BattleScreen({
         useNativeDriver: true,
       })
     ]).start();
+  }, []);
 
-    onAnswer(match.currentQuestionIndex, optionIndex, reactionTime);
+  // Timer countdown and state reset per question
+  useEffect(() => {
+    // Reset local state
+    setTimeLeft(SECONDS_PER_QUESTION);
+    setSelectedAnswer(null);
+    setShowResult(false);
+    setQuestionStartTime(Date.now());
+    hasAnsweredRef.current = false;
+
+    // Reset animations
+    timerAnim.setValue(1);
+    flashAnim.setValue(0);
+    scaleAnim.setValue(0.5);
+
+    // Initial animations
+    Animated.timing(timerAnim, {
+      toValue: 0,
+      duration: SECONDS_PER_QUESTION * 1000,
+      useNativeDriver: false,
+    }).start();
+
+    // Start timer interval
+    stopTimer();
+    timerIntervalRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          stopTimer();
+          handleTimeout();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => stopTimer();
+  }, [match.currentQuestionIndex]);
+
+  const handleTimeout = useCallback(() => {
+    if (hasAnsweredRef.current) return;
+    hasAnsweredRef.current = true;
+    
+    setSelectedAnswer(-1); // Mark as timeout
+    triggerFeedback(false);
+
+    // Defer state update to next tick to avoid "update during render" error
+    setTimeout(() => {
+      onAnswer(match.currentQuestionIndex, -1, SECONDS_PER_QUESTION * 1000);
+    }, 0);
+  }, [match.currentQuestionIndex, onAnswer, triggerFeedback]);
+
+  const handleSelectAnswer = (optionIndex: number) => {
+    if (hasAnsweredRef.current || selectedAnswer !== null) return;
+    hasAnsweredRef.current = true;
+
+    stopTimer();
+
+    const reactionTime = Date.now() - questionStartTime;
+    setSelectedAnswer(optionIndex);
+    
+    const isCorrect = optionIndex === currentQuestion.correctIndex;
+    triggerFeedback(isCorrect);
+
+    // Defer state update to next tick to avoid "update during render" error
+    setTimeout(() => {
+      onAnswer(match.currentQuestionIndex, optionIndex, reactionTime);
+    }, 0);
   };
 
   const getOptionStyle = (index: number) => {

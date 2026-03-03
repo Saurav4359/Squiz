@@ -51,6 +51,7 @@ export default function App() {
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [leaderboardCache, setLeaderboardCache] = useState<Record<string, LeaderboardEntry[]>>({});
   const [appReady, setAppReady] = useState(false);
+  const matchSearchSession = React.useRef(0);
 
   // ─── Wallet → Auth bridge ─────────────────────────────
   useEffect(() => {
@@ -129,47 +130,46 @@ export default function App() {
   const handleFindMatch = useCallback(
     (role: UserRole, wager: 'sol' | 'skr') => {
       if (!authHook.player) return;
+      
+      const sessionId = ++matchSearchSession.current;
       setSelectedRole(role);
       setWagerType(wager);
+      setCurrentMatch(null); // Reset
       setCurrentScreen('matchmaking');
 
-      // Fetch AI questions + simulate matchmaking in parallel
       const startMatch = async () => {
-        // Start with a randomized selection of UNSEEN fallbacks immediately
+        // 1. Initial background work
         let questions: Question[] = (await filterSeenQuestions(generateFallbackQuestions(role, 20))).slice(0, QUESTIONS_PER_MATCH);
-
-        // If we ran out of unique fallbacks (unlikely), generate some anyway to avoid empty match
         if (questions.length < QUESTIONS_PER_MATCH) {
           questions = generateFallbackQuestions(role, QUESTIONS_PER_MATCH);
         }
 
         try {
           const news = await fetchLatestNews();
-          // Ask for more than needed so we have room to filter seen ones
           let aiQuestions = await generateQuestionsFromNews(news, role, QUESTIONS_PER_MATCH * 2);
           aiQuestions = await filterSeenQuestions(aiQuestions);
-
           if (aiQuestions.length >= QUESTIONS_PER_MATCH) {
             questions = aiQuestions.slice(0, QUESTIONS_PER_MATCH);
-          } else if (aiQuestions.length > 0) {
-            // Mix unique news with unique fallbacks
-            const uniqueFallbacks = await filterSeenQuestions(generateFallbackQuestions(role, 20));
-            questions = [...aiQuestions, ...uniqueFallbacks].slice(0, QUESTIONS_PER_MATCH);
           }
         } catch (err) {
-          console.warn('[App] AI question gen failed, using existing fallbacks:', err);
+          console.warn('[App] AI question gen failed:', err);
         }
 
-        // Mark these as seen so they never appear again for this user
+        // Check if still on this search session
+        if (sessionId !== matchSearchSession.current) return;
+
         await markQuestionsAsSeen(questions);
 
-        // Ensure minimum matchmaking time for UX
-        await new Promise((r) => setTimeout(r, 3000 + Math.random() * 2000));
+        // 2. Simulate match found
+        const minSeekTime = 2500 + Math.random() * 2000;
+        await new Promise((r) => setTimeout(r, minSeekTime));
+        
+        if (sessionId !== matchSearchSession.current) return;
 
         const playerRating = authHook.player!.ratings[role] || DEFAULT_RATING;
         const opponentRating = playerRating + Math.floor(Math.random() * 200 - 100);
-
         const matchId = `match_${Date.now()}`;
+        
         const match: Match = {
           id: matchId,
           playerA: {
@@ -196,24 +196,25 @@ export default function App() {
           startedAt: Date.now(),
         };
 
-        // Create escrow and deposit (fire-and-forget — doesn't block match start)
-        createEscrow(matchId, authHook.player!.id, 'bot_opponent', wager)
-          .then(() => depositWager(
-            matchId,
-            authHook.player!.id,
-            wallet.address || '',
-            wallet.authToken || 'dev_token',
-            wager
-          ))
-          .catch(e => console.warn('[App] Escrow setup failed:', e));
-
         setCurrentMatch(match);
+        // We stay on 'matchmaking' screen, but it now sees `currentMatch` and shows VS UI
+        
+        // 3. VS Hold screen (2.5 seconds)
+        await new Promise((r) => setTimeout(r, 2500));
+        
+        if (sessionId !== matchSearchSession.current) return;
+
+        // 4. Start battle & Escrow
+        createEscrow(matchId, authHook.player!.id, 'bot_opponent', wager)
+          .then(() => depositWager(matchId, authHook.player!.id, wallet.address || '', wallet.authToken || 'dev_token', wager))
+          .catch(e => console.warn('[App] Escrow failed:', e));
+
         setCurrentScreen('battle');
       };
 
       startMatch();
     },
-    [authHook.player]
+    [authHook.player, wallet.address, wallet.authToken]
   );
 
   const handleAnswer = useCallback(
@@ -279,6 +280,7 @@ export default function App() {
             updatedA.answers.length;
           const xp = calculateXP(
             isWin,
+            wagerType === 'skr', // isSkrMatch
             correctCount,
             prev.questions.length,
             avgReaction,
@@ -333,7 +335,11 @@ export default function App() {
 
   const handleMatchEnd = useCallback(() => setCurrentScreen('results'), []);
   const handleNavigate = useCallback((s: string) => setCurrentScreen(s as Screen), []);
-  const handleCancel = useCallback(() => setCurrentScreen('home'), []);
+  const handleCancel = useCallback(() => {
+    matchSearchSession.current = 0; // Invalidate current session
+    setCurrentMatch(null); // Clear pending match
+    setCurrentScreen('home');
+  }, []);
 
   const handlePlayAgain = useCallback(() => {
     setCurrentMatch(null);
@@ -404,6 +410,7 @@ export default function App() {
             wagerType={wagerType}
             onMatchFound={() => {}}
             onCancel={handleCancel}
+            match={currentMatch}
           />
         );
       case 'battle':

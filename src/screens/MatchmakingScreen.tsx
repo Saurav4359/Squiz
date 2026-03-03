@@ -18,6 +18,7 @@ interface MatchmakingScreenProps {
   wagerType: 'sol' | 'skr';
   onMatchFound: (matchId: string) => void;
   onCancel: () => void;
+  match?: any;
 }
 
 export default function MatchmakingScreen({
@@ -27,6 +28,7 @@ export default function MatchmakingScreen({
   wagerType,
   onMatchFound,
   onCancel,
+  match,
 }: MatchmakingScreenProps) {
   const [statusText, setStatusText] = useState('Searching for opponent...');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -155,54 +157,106 @@ export default function MatchmakingScreen({
         </Text>
       </View>
 
-      {/* Center animation */}
+      {/* Center animation / Match Found UI */}
       <View style={styles.centerArea}>
-        {renderRing(ring1)}
-        {renderRing(ring2)}
-        {renderRing(ring3)}
+        {!match ? (
+          <>
+            {renderRing(ring1)}
+            {renderRing(ring2)}
+            {renderRing(ring3)}
 
-        <Animated.View
-          style={[
-            styles.searchCircle,
-            {
-              opacity: pulseAnim,
-              transform: [{ rotate: spin }],
-            },
-          ]}
-        >
-          <LinearGradient
-            colors={wagerType === 'skr' ? colors.gradientPurple : colors.gradientPrimary}
-            style={styles.searchCircleInner}
-          >
-            <Text style={styles.searchIcon}>⚔️</Text>
-          </LinearGradient>
-        </Animated.View>
+            <Animated.View
+              style={[
+                styles.searchCircle,
+                {
+                  opacity: pulseAnim,
+                  transform: [{ rotate: spin }],
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={wagerType === 'skr' ? colors.gradientPurple : colors.gradientPrimary}
+                style={styles.searchCircleInner}
+              >
+                <Text style={styles.searchIcon}>⚔️</Text>
+              </LinearGradient>
+            </Animated.View>
 
-        <View style={styles.playerBadge}>
-          <Text style={styles.playerBadgeName}>{playerUsername}</Text>
-          <Text style={styles.playerBadgeRating}>{playerRating}</Text>
-        </View>
+            <View style={styles.playerBadge}>
+              <Text style={styles.playerBadgeName}>{playerUsername}</Text>
+              <Text style={styles.playerBadgeRating}>{playerRating}</Text>
+            </View>
+          </>
+        ) : (
+          <View style={styles.matchFoundContainer}>
+            <View style={styles.vsRow}>
+              {/* You */}
+              <View style={styles.matchPlayer}>
+                <LinearGradient
+                  colors={colors.gradientPrimary}
+                  style={styles.avatarCircle}
+                >
+                  <Text style={styles.avatarText}>{playerUsername[0].toUpperCase()}</Text>
+                </LinearGradient>
+                <Text style={styles.matchPlayerName}>{playerUsername}</Text>
+                <Text style={styles.matchPlayerLabel}>YOU</Text>
+              </View>
+
+              {/* VS */}
+              <View style={styles.matchVsBox}>
+                <LinearGradient
+                  colors={['#FFD700', '#B8860B'] as const}
+                  style={styles.vsCircle}
+                >
+                  <Text style={styles.vsCircleText}>VS</Text>
+                </LinearGradient>
+              </View>
+
+              {/* Opponent */}
+              <View style={styles.matchPlayer}>
+                <LinearGradient
+                  colors={colors.gradientPurple}
+                  style={styles.avatarCircle}
+                >
+                  <Text style={styles.avatarText}>{match.playerB.username[0].toUpperCase()}</Text>
+                </LinearGradient>
+                <Text style={styles.matchPlayerName}>{match.playerB.username}</Text>
+                <Text style={styles.matchPlayerLabel}>OPPONENT</Text>
+              </View>
+            </View>
+
+            <View style={styles.readyTag}>
+              <Text style={styles.readyText}>GET READY!</Text>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Status */}
-      <View style={styles.statusArea}>
-        <Text style={styles.statusText}>{statusText}</Text>
-        <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
-      </View>
+      {!match && (
+        <View style={styles.statusArea}>
+          <Text style={styles.statusText}>{statusText}</Text>
+          <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
+        </View>
+      )}
 
       {/* Rating range info */}
-      <View style={styles.infoBox}>
-        <Text style={styles.infoLabel}>Rating Range</Text>
-        <Text style={styles.infoValue}>
-          {Math.max(100, playerRating - 200 - elapsedSeconds * 10)} —{' '}
-          {playerRating + 200 + elapsedSeconds * 10}
-        </Text>
-      </View>
+      {!match && (
+        <View style={styles.infoBox}>
+          <Text style={styles.infoLabel}>Rating Range</Text>
+          <Text style={styles.infoValue}>
+            {Math.max(100, playerRating - 200 - elapsedSeconds * 10)} —{' '}
+            {playerRating + 200 + elapsedSeconds * 10}
+          </Text>
+        </View>
+      )}
 
       {/* Cancel button */}
-      <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
-        <Text style={styles.cancelText}>CANCEL</Text>
-      </TouchableOpacity>
+      {!match && (
+        <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
+          <Text style={styles.cancelText}>CANCEL</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -325,5 +379,79 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
     color: colors.danger,
     letterSpacing: 2,
+  },
+  matchFoundContainer: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  vsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.lg,
+    marginBottom: spacing.xxxl,
+  },
+  matchPlayer: {
+    alignItems: 'center',
+    width: 100,
+  },
+  avatarCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  avatarText: {
+    fontSize: 32,
+    fontWeight: fontWeight.bold,
+    color: colors.bg,
+  },
+  matchPlayerName: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+    textAlign: 'center',
+  },
+  matchPlayerLabel: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    marginTop: 4,
+    letterSpacing: 1,
+  },
+  matchVsBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vsCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.bg,
+  },
+  vsCircleText: {
+    fontSize: 18,
+    fontWeight: fontWeight.extrabold,
+    color: colors.bg,
+  },
+  readyTag: {
+    backgroundColor: colors.primaryDim,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xxl,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  readyText: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.extrabold,
+    color: colors.primary,
+    letterSpacing: 3,
   },
 });

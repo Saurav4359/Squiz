@@ -71,14 +71,22 @@ export function calculateDrawRatings(
  */
 export function calculateXP(
   won: boolean,
-  _correctAnswers: number,
-  _totalQuestions: number,
-  _avgReactionTimeMs: number,
-  _isSkrStaker: boolean,
-  _streakDays: number
+  isSkrMatch: boolean = false,
+  _correctAnswers: number = 0,
+  _totalQuestions: number = 5,
+  _avgReactionTimeMs: number = 2000,
+  _isSkrStaker: boolean = false,
+  _streakDays: number = 0
 ): number {
-  // STRICT REWARDS: Exactly 20 for win, 5 for loss as requested
-  return won ? 20 : 5;
+  // Base XP: 20 for win, 5 for loss
+  let xp = won ? 20 : 5;
+
+  // Multiplier for SKR matches: 1.5x
+  if (isSkrMatch) {
+    xp *= 1.5;
+  }
+
+  return xp;
 }
 
 /**
