@@ -158,10 +158,11 @@ export default function MatchHistoryScreen({ playerId, onNavigate }: MatchHistor
                         <Text style={styles.statLabel}>Avg Speed</Text>
                       </View>
                       <View style={styles.statItem}>
-                        <Text style={styles.statValue}>
-                          {(match.wagerLamports / 1e9).toFixed(2)} SOL
+                        <Text style={[styles.statValue, { color: resultColor }]}>
+                          {result === 'win' ? '+' : result === 'loss' ? '-' : ''}
+                          {(match.wagerLamports / (match.wagerType === 'skr' ? 1e6 : 1e9)).toFixed(2)} {match.wagerType?.toUpperCase() || 'SOL'}
                         </Text>
-                        <Text style={styles.statLabel}>Wager</Text>
+                        <Text style={styles.statLabel}>Outcome</Text>
                       </View>
                     </View>
                   </View>
@@ -257,7 +258,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
 
-  matchList: { padding: spacing.lg, gap: spacing.md },
+  matchList: { padding: spacing.md, gap: spacing.sm },
 
   matchCard: {
     backgroundColor: colors.bgCard,
@@ -271,12 +272,12 @@ const styles = StyleSheet.create({
   resultBar: {
     width: 4,
   },
-  matchContent: { flex: 1, padding: spacing.lg },
+  matchContent: { flex: 1, paddingVertical: spacing.md, paddingHorizontal: spacing.lg },
   matchHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   resultLabel: {
     fontSize: fontSize.sm,
@@ -292,12 +293,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     gap: spacing.xl,
   },
   scoreBox: { alignItems: 'center' },
   scoreLabel: { fontSize: fontSize.xs, color: colors.textSecondary, marginBottom: 2 },
-  scoreNum: { fontSize: fontSize.xxxl, fontWeight: fontWeight.extrabold, color: colors.text },
+  scoreNum: { fontSize: fontSize.xl, fontWeight: fontWeight.extrabold, color: colors.text },
   scoreSep: { fontSize: fontSize.sm, color: colors.textDim },
 
   statsRow: { flexDirection: 'row', justifyContent: 'space-around' },

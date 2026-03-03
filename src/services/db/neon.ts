@@ -64,10 +64,22 @@ async function ensureTables() {
           playerB JSONB NOT NULL,
           winnerId TEXT,
           role TEXT,
+          wagerLamports BIGINT DEFAULT 0,
+          wagerType TEXT DEFAULT 'sol',
           createdAt BIGINT,
           endedAt BIGINT
       );
     `;
+    
+    // Add missing columns if they don't exist
+    try {
+      await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS playera JSONB`;
+      await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS playerb JSONB`;
+      await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS wagerLamports BIGINT DEFAULT 0`;
+      await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS wagertype TEXT DEFAULT 'sol'`;
+    } catch (e) {
+      console.warn('[Neon] Migration: matches columns already exist or failed:', e);
+    }
     
     // Seed some legendary bot players for the leaderboard if table is empty
     const playerCount = await sql`SELECT count(*) FROM players`;
@@ -247,6 +259,7 @@ export async function getLeaderboard(role: UserRole): Promise<any[]> {
 
 // ─── Match Persistence ────────────────────────────────────────
 export async function persistMatchResult(data: any): Promise<void> {
+  await ensureTables();
   const { 
     match, 
     currentPlayerId, 
@@ -254,7 +267,8 @@ export async function persistMatchResult(data: any): Promise<void> {
     ratingResult, 
     xpEarned, 
     isWin, 
-    isDraw 
+    isDraw,
+    wagerType
   } = data;
 
   // 1. Find the player by ID
@@ -285,16 +299,36 @@ export async function persistMatchResult(data: any): Promise<void> {
       lastactiveat = ${Date.now()}
     WHERE id = ${Number(currentPlayerId)}
   `;
+  console.log(`[Neon] Player stats updated for ID: ${currentPlayerId}`);
 
-  // 4. Record the match (if matches table exists)
-  // try {
-  //   await sql`
-  //     INSERT INTO matches (id, playerA, playerB, winnerId, role, createdAt)
-  //     VALUES (${match.id}, ${match.playerA.id}, ${match.playerB.id}, ${match.winnerId}, ${role}, ${Date.now()})
-  //   `;
-  // } catch (e) {
-  //   console.warn('[Neon] Match record insertion failed (table might not exist):', e);
-  // }
+  // 4. Record the match
+  try {
+    const pA = typeof match.playerA === 'string' ? match.playerA : JSON.stringify(match.playerA);
+    const pB = typeof match.playerB === 'string' ? match.playerB : JSON.stringify(match.playerB);
+
+    await sql`
+      INSERT INTO matches (id, playera, playerb, winnerid, role, wagerlamports, wagertype, createdat, endedat)
+      VALUES (
+        ${match.id}, 
+        ${pA}::jsonb, 
+        ${pB}::jsonb, 
+        ${match.winnerId || null}, 
+        ${role}, 
+        ${match.wagerLamports || 0},
+        ${wagerType || 'sol'},
+        ${match.createdAt}, 
+        ${Date.now()}
+      )
+      ON CONFLICT (id) DO UPDATE SET 
+        winnerid = EXCLUDED.winnerid,
+        endedat = EXCLUDED.endedat,
+        playera = EXCLUDED.playera,
+        playerb = EXCLUDED.playerb
+    `;
+    console.log(`[Neon] Match history record saved: ${match.id}`);
+  } catch (e) {
+    console.warn('[Neon] Match record insertion failed:', e);
+  }
 }
 
 // ─── Match History ───────────────────────────────────────────
@@ -303,17 +337,18 @@ export async function getMatchHistory(playerId: string): Promise<any[]> {
   try {
     const result = await sql`
       SELECT * FROM matches 
-      WHERE "playerA"->>'id' = ${playerId} OR "playerB"->>'id' = ${playerId}
-      ORDER BY "endedAt" DESC 
+      WHERE (playera->>'id' = ${String(playerId)} OR playerb->>'id' = ${String(playerId)})
+      ORDER BY endedat DESC 
       LIMIT 20
     `;
     return result.map(m => ({
       ...m,
-      id: m.id,
-      playerA: m.playerA,
-      playerB: m.playerB,
-      questions: m.questions || [],
-      endedAt: Number(m.endedAt)
+      playerA: m.playera,
+      playerB: m.playerb,
+      winnerId: m.winnerid,
+      wagerLamports: Number(m.wagerlamports || 0),
+      wagerType: m.wagertype || 'sol',
+      endedAt: Number(m.endedat)
     }));
   } catch (e) {
     console.warn('[Neon] Match history fetch failed:', e);
