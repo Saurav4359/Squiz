@@ -283,7 +283,7 @@ export async function persistMatchResult(data: any): Promise<void> {
   
   // FIX: ratingResult contains winnerNewRating/loserNewRating, not playerNewRating
   const newRating = isWin ? ratingResult.winnerNewRating : ratingResult.loserNewRating;
-  const newXP = (player.xp || 0) + xpEarned;
+  const newXP = Number(player.xp || 0) + Number(xpEarned);
 
   // 3. Update player record
   // Use explicit casting and ensure columns exist
