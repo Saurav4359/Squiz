@@ -117,65 +117,108 @@ export async function pollForMatch(
   wagerType: 'sol' | 'skr'
 ): Promise<{ status: 'searching' | 'matched'; match?: Match }> {
 
-  // Step 1: Check if someone already matched us (1 query)
+  // Step 1: Update heartbeat and check if already matched
+  const now = Date.now();
   const myEntry = await sql`
-    SELECT match_id, status FROM matchmaking_queue 
-    WHERE player_id = ${playerId} LIMIT 1
+    UPDATE matchmaking_queue
+    SET updated_at = ${now}
+    WHERE player_id = ${playerId}
+    RETURNING id, match_id, status, username, rating
   `;
 
   if (myEntry.length === 0) {
     return { status: 'searching' }; // Entry was cleaned up, caller should re-join
   }
 
+  const me = myEntry[0];
+
   // If we've been matched by the other player
-  if (myEntry[0].status === 'matched' && myEntry[0].match_id) {
-    const match = await getLiveMatch(myEntry[0].match_id);
-    if (match) return { status: 'matched', match };
+  if (me.status === 'matched' && me.match_id) {
+    // Retry up to 5 times (covers the case where Player 1's INSERT
+    // hasn't committed yet, or is momentarily slow)
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const match = await getLiveMatch(me.match_id);
+      if (match) return { status: 'matched', match };
+      if (attempt < 4) {
+        // Wait 1.5s between retries
+        await new Promise(r => setTimeout(r, 1500));
+      }
+    }
+    // Match never appeared after 5 attempts (~6s). Player 1's INSERT likely failed.
+    // Reset us to 'searching' so we can be re-matched.
+    console.warn('[LiveMatch] Match', me.match_id, 'never appeared — resetting to searching');
+    await sql`
+      UPDATE matchmaking_queue 
+      SET status = 'searching', match_id = NULL, updated_at = ${Date.now()}
+      WHERE player_id = ${playerId}
+    `;
+    return { status: 'searching' };
   }
 
-  // Step 2: Find an opponent in the same role & wager (1 query, combined with update)
+  // Step 2: Find a potential opponent who is 'searching'
   const opponents = await sql`
-    SELECT * FROM matchmaking_queue 
+    SELECT id, player_id, username, rating FROM matchmaking_queue 
     WHERE player_id != ${playerId} 
       AND role = ${role} 
       AND wager_type = ${wagerType} 
       AND status = 'searching'
+      AND updated_at > ${now - 15000} -- Ignore zombies
     ORDER BY created_at ASC 
     LIMIT 1
   `;
 
   if (opponents.length === 0) {
+    return { status: 'searching' }; // No opponents available
+  }
+
+  const potentialOpponent = opponents[0];
+  const matchId = `live_${now}_${Math.random().toString(36).slice(2, 6)}`;
+
+  // Step 3: ATOMICALLY try to claim BOTH ourselves AND the opponent in ONE query.
+  // This physically prevents two emulators from independently creating paradox matches.
+  const claimResult = await sql`
+    UPDATE matchmaking_queue 
+    SET status = 'matched', match_id = ${matchId}, updated_at = ${now}
+    WHERE id IN (${me.id}, ${potentialOpponent.id}) 
+      AND status = 'searching'
+    RETURNING id
+  `;
+
+  if (claimResult.length !== 2) {
+    // We lost the race condition. One of us wasn't searching!
+    // Revert whichever single row (likely our own) we accidentally updated back to searching.
+    if (claimResult.length === 1) {
+      await sql`
+        UPDATE matchmaking_queue 
+        SET status = 'searching', match_id = NULL 
+        WHERE id = ${claimResult[0].id}
+      `;
+    }
     return { status: 'searching' };
   }
 
-  // Step 3: WE create the match (first-come creates it)
-  const opponent = opponents[0];
-  const me = await sql`SELECT * FROM matchmaking_queue WHERE player_id = ${playerId} LIMIT 1`;
-  if (me.length === 0) return { status: 'searching' };
-
-  const matchId = `live_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  // Step 4: We successfully claimed BOTH! We are the sole creator of the match.
   const questions = generateFallbackQuestions(role, QUESTIONS_PER_MATCH);
-  const now = Date.now();
 
   const playerA: MatchPlayer = {
-    id: me[0].player_id,
-    username: me[0].username,
-    rating: me[0].rating,
+    id: playerId,
+    username: me.username,
+    rating: me.rating,
     answers: [],
     score: 0,
     isReady: true,
   };
 
   const playerB: MatchPlayer = {
-    id: opponent.player_id,
-    username: opponent.username,
-    rating: opponent.rating,
+    id: potentialOpponent.player_id,
+    username: potentialOpponent.username,
+    rating: potentialOpponent.rating,
     answers: [],
     score: 0,
     isReady: true,
   };
 
-  // Insert the live match (1 query)
+  // Insert the live match
   await sql`
     INSERT INTO live_matches (
       id, player_a, player_b, questions, answers_a, answers_b, 
@@ -192,29 +235,21 @@ export async function pollForMatch(
     )
   `;
 
-  // Mark both players as matched (1 query with OR condition)
-  await sql`
-    UPDATE matchmaking_queue 
-    SET status = 'matched', match_id = ${matchId}, updated_at = ${now}
-    WHERE player_id IN (${playerId}, ${opponent.player_id})
-  `;
+  // Step 5: Verify the INSERT persisted before returning (defensive check)
+  const verifiedMatch = await getLiveMatch(matchId);
+  if (!verifiedMatch) {
+    // INSERT silently failed — reset both rows back to 'searching'
+    console.warn('[LiveMatch] Match INSERT failed for', matchId, '— resetting both to searching');
+    await sql`
+      UPDATE matchmaking_queue 
+      SET status = 'searching', match_id = NULL, updated_at = ${Date.now()}
+      WHERE id IN (${me.id}, ${potentialOpponent.id})
+    `;
+    return { status: 'searching' };
+  }
 
-  console.log(`[LiveMatch] Match created: ${me[0].username} vs ${opponent.username}`);
-
-  const match: Match = {
-    id: matchId,
-    playerA,
-    playerB,
-    questions,
-    currentQuestionIndex: 0,
-    wagerLamports: 50000000,
-    wagerType,
-    status: 'in_progress',
-    createdAt: now,
-    startedAt: now,
-  };
-
-  return { status: 'matched', match };
+  console.log(`[LiveMatch] Match created & verified: ${me.username} vs ${potentialOpponent.username}`);
+  return { status: 'matched', match: verifiedMatch };
 }
 
 // ──────────────────────────────────────────────────────────

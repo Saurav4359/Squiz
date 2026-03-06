@@ -17,7 +17,7 @@ import { useAuth } from './src/hooks/useAuth';
 import { colors, fontSize, fontWeight, spacing } from './src/config/theme';
 import { DEFAULT_RATING, ROLES, UserRole, QUESTIONS_PER_MATCH } from './src/config/constants';
 import { Player, Match, Question, DailyQuest, LeaderboardEntry } from './src/types';
-import { calculateMatchRatings, calculateXP } from './src/services/matchmaking/ratingSystem';
+import { calculateMatchRatings, calculateDrawRatings, calculateXP } from './src/services/matchmaking/ratingSystem';
 import { generateQuestionsFromNews, fetchLatestNews, generateFallbackQuestions } from './src/services/ai/questionGenerator';
 import { filterSeenQuestions, markQuestionsAsSeen } from './src/services/ai/antiCheat';
 import { getLeaderboard, persistMatchResult, updatePlayer } from './src/services/db/neon';
@@ -57,6 +57,7 @@ export default function App() {
   const matchSearchSession = React.useRef(0);
   const liveMatchId = React.useRef<string | null>(null);
   const pollTimerRef = React.useRef<any>(null);
+  const waitingCancelledRef = React.useRef(false); // guard: prevents results from showing after cancel
 
   // Keep ref in sync to access inside closures without dependency arrays
   useEffect(() => {
@@ -210,6 +211,20 @@ export default function App() {
   const handleAnswer = useCallback(
     (questionIndex: number, selectedOption: number, reactionTimeMs: number) => {
       if (!currentMatch || !authHook.player) return;
+      // Guard: don't double-record the same question (e.g. timeout fires after tap)
+      const alreadyAnswered = [
+        ...currentMatch.playerA.answers,
+        ...currentMatch.playerB.answers,
+      ].some((a: any) => a.questionIndex === questionIndex && 
+        (currentMatch.playerA.id === authHook.player!.id 
+          ? currentMatch.playerA.answers 
+          : currentMatch.playerB.answers
+        ).some((myA: any) => myA.questionIndex === questionIndex)
+      );
+      const myCurrentAnswers = currentMatch.playerA.id === authHook.player.id
+        ? currentMatch.playerA.answers
+        : currentMatch.playerB.answers;
+      if (myCurrentAnswers.some((a: any) => a.questionIndex === questionIndex)) return;
 
       const question = currentMatch.questions[questionIndex];
       const isCorrect = selectedOption === question.correctIndex;
@@ -283,11 +298,40 @@ export default function App() {
   // Poll DB until opponent has also finished all questions, then show results
   const startWaitingForOpponent = useCallback(() => {
     if (!authHook.player || !liveMatchId.current) return;
+    waitingCancelledRef.current = false;
 
     const playerId = authHook.player.id;
     const matchId = liveMatchId.current;
+    const startTime = Date.now();
+    const TIMEOUT_MS = 90 * 1000; // 90 second absolute timeout — no one waits forever
 
     const checkDone = async () => {
+      // Cancelled if user went home during wait
+      if (waitingCancelledRef.current) return;
+      
+      // Absolute timeout: force results even if opponent dropped
+      if (Date.now() - startTime > TIMEOUT_MS) {
+        console.warn('[App] Waiting timeout hit — forcing results with available data');
+        const finalMatch = localMatchRef.current;
+        if (finalMatch) {
+          const winnerId =
+            finalMatch.playerA.score > finalMatch.playerB.score ? finalMatch.playerA.id
+            : finalMatch.playerB.score > finalMatch.playerA.score ? finalMatch.playerB.id
+            : undefined;
+          finishLiveMatch(matchId, winnerId).catch(console.warn);
+          setCurrentMatch({ ...finalMatch, status: 'finished', winnerId, endedAt: Date.now() });
+          // Re-use last known result or fabricate draw result  
+          const isPlayerA = finalMatch.playerA.id === playerId;
+          const myR = isPlayerA ? finalMatch.playerA.rating : finalMatch.playerB.rating;
+          const oppR = isPlayerA ? finalMatch.playerB.rating : finalMatch.playerA.rating;
+          const dr = calculateDrawRatings(myR, oppR);
+          setRatingResult({ winnerNewRating: dr.newRatingA, loserNewRating: dr.newRatingA, winnerDelta: dr.deltaA, loserDelta: dr.deltaA });
+          setXpEarned(5); // Consolation XP for timeout
+          setCurrentScreen('results');
+        }
+        return;
+      }
+
       try {
         const latestMatch = await pollMatchState(matchId);
         if (!latestMatch) return;
@@ -326,10 +370,28 @@ export default function App() {
               : undefined;
 
           const isWin = winnerId === playerId;
-          const result = calculateMatchRatings(
-            isWin ? latestMatch.playerA.rating : latestMatch.playerB.rating,
-            isWin ? latestMatch.playerB.rating : latestMatch.playerA.rating
-          );
+          const isDraw = winnerId === undefined;
+          
+          let result;
+          if (isDraw) {
+            const myRating = isPlayerA ? latestMatch.playerA.rating : latestMatch.playerB.rating;
+            const oppRating = isPlayerA ? latestMatch.playerB.rating : latestMatch.playerA.rating;
+            const drawResult = calculateDrawRatings(myRating, oppRating);
+            result = {
+              winnerNewRating: drawResult.newRatingA,
+              loserNewRating: drawResult.newRatingA,
+              winnerDelta: drawResult.deltaA,
+              loserDelta: drawResult.deltaA,
+            };
+          } else {
+            const realWinnerRating = latestMatch.playerA.score > latestMatch.playerB.score
+              ? latestMatch.playerA.rating
+              : latestMatch.playerB.rating;
+            const realLoserRating = latestMatch.playerA.score > latestMatch.playerB.score
+              ? latestMatch.playerB.rating
+              : latestMatch.playerA.rating;
+            result = calculateMatchRatings(realWinnerRating, realLoserRating);
+          }
           setRatingResult(result);
 
           const myAnswers = isPlayerA ? latestMatch.playerA.answers : latestMatch.playerB.answers;
@@ -381,11 +443,15 @@ export default function App() {
           setCurrentScreen('results');
         } else {
           // Opponent still playing — poll again in 2 seconds
-          pollTimerRef.current = setTimeout(checkDone, 2000);
+          if (!waitingCancelledRef.current) {
+            pollTimerRef.current = setTimeout(checkDone, 2000);
+          }
         }
       } catch (err) {
         console.warn('[App] Waiting poll error:', err);
-        pollTimerRef.current = setTimeout(checkDone, 3000);
+        if (!waitingCancelledRef.current) {
+          pollTimerRef.current = setTimeout(checkDone, 3000);
+        }
       }
     };
 
@@ -396,7 +462,8 @@ export default function App() {
   const handleMatchEnd = useCallback(() => setCurrentScreen('results'), []);
   const handleNavigate = useCallback((s: string) => setCurrentScreen(s as Screen), []);
   const handleCancel = useCallback(() => {
-    matchSearchSession.current = 0;
+    matchSearchSession.current++; // invalidate all in-flight polls
+    waitingCancelledRef.current = true; // stop waiting poller
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     // Remove from queue in DB
     if (authHook.player) {
@@ -508,7 +575,16 @@ export default function App() {
           </View>
         );
       case 'results':
-        if (!currentMatch || !ratingResult) return null;
+        if (!currentMatch) return null;
+        // If ratingResult not computed yet, show loading briefly
+        if (!ratingResult) {
+          return (
+            <View style={styles.waitingContainer}>
+              <ActivityIndicator color={colors.primary} size="large" />
+              <Text style={styles.waitingHint}>Computing results...</Text>
+            </View>
+          );
+        }
         return (
           <ResultsScreen
             match={currentMatch}
