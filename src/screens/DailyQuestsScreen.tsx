@@ -132,29 +132,6 @@ export default function DailyQuestsScreen({ quests, onNavigate }: DailyQuestsScr
         <View style={{ height: 80 }} />
       </ScrollView>
 
-      {/* Bottom Nav */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('home')}>
-          <Text style={styles.navIcon}>🏠</Text>
-          <Text style={styles.navLabel}>Home</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('leaderboard')}>
-          <Text style={styles.navIcon}>🏆</Text>
-          <Text style={styles.navLabel}>Ranks</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => {}}>
-          <Text style={[styles.navIcon, styles.navActive]}>📋</Text>
-          <Text style={[styles.navLabel, styles.navActive]}>Quests</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('history')}>
-          <Text style={styles.navIcon}>⚔️</Text>
-          <Text style={styles.navLabel}>History</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('profile')}>
-          <Text style={styles.navIcon}>👤</Text>
-          <Text style={styles.navLabel}>Profile</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }

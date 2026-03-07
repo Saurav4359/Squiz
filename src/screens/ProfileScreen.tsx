@@ -1,13 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Modal,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
+import { colors, spacing, fontSize, fontWeight, borderRadius as radius } from '../config/theme';
 import { ROLES, UserRole } from '../config/constants';
 import { Player } from '../types';
 import {
@@ -23,9 +28,20 @@ interface ProfileScreenProps {
   walletBalance?: { sol: number; skr: number };
   onDisconnect?: () => void;
   onUpdatePlayer?: (data: Partial<Player>) => Promise<void>;
+  onUpdatePassword?: (newPassword: string) => Promise<void>;
 }
 
-export default function ProfileScreen({ player, onNavigate, walletBalance, onDisconnect, onUpdatePlayer }: ProfileScreenProps) {
+export default function ProfileScreen({ 
+  player, 
+  onNavigate, 
+  walletBalance, 
+  onDisconnect, 
+  onUpdatePlayer,
+  onUpdatePassword 
+}: ProfileScreenProps) {
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  
   const level = calculateLevel(player.xp);
   const xpProgress = getXPForNextLevel(player.xp);
 
@@ -60,6 +76,9 @@ export default function ProfileScreen({ player, onNavigate, walletBalance, onDis
 
           <Text style={styles.username}>{player.username}</Text>
           <Text style={styles.seekerId}>Seeker #{player.seekerId}</Text>
+          {player.twitter && (
+            <Text style={styles.twitterHandle}>@{player.twitter.replace(/^@/, '')}</Text>
+          )}
 
           {player.isSkrStaker && (
             <View style={styles.skrStakerBadge}>
@@ -101,78 +120,30 @@ export default function ProfileScreen({ player, onNavigate, walletBalance, onDis
               <Text style={styles.statLabel}>Wins</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={[styles.statValue, { color: colors.primary }]}>
-                {player.matchesPlayed > 0
-                  ? Math.round((player.matchesWon / player.matchesPlayed) * 100)
+              <Text style={styles.statValue}>
+                {player.matchesPlayed > 0 
+                  ? Math.round((player.matchesWon / player.matchesPlayed) * 100) 
                   : 0}%
               </Text>
               <Text style={styles.statLabel}>Win Rate</Text>
             </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>
-                {(player.avgReactionTime / 1000).toFixed(1)}s
-              </Text>
-              <Text style={styles.statLabel}>Avg Speed</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={[styles.statValue, { color: colors.warning }]}>
-                🔥 {player.currentStreak}
-              </Text>
-              <Text style={styles.statLabel}>Streak</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{player.bestStreak}</Text>
-              <Text style={styles.statLabel}>Best Streak</Text>
-            </View>
           </View>
         </View>
 
-        {/* Ratings by Role */}
+        {/* Rank Info */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>RATINGS BY ROLE</Text>
-          {sortedRoles.map(({ role, rating }) => {
-            const rankTitle = getRankTitle(rating);
-            const rankColor = getRankColor(rating);
-            const isPrimary = role === player.primaryRole;
-            return (
-              <View key={role} style={styles.ratingRow}>
-                <View style={styles.ratingInfo}>
-                  <Text style={[styles.ratingRole, isPrimary && { color: colors.primary }]}>
-                    {role}
-                    {isPrimary && ' ⭐'}
-                  </Text>
-                  <Text style={[styles.ratingRank, { color: rankColor }]}>
-                    {rankTitle}
-                  </Text>
-                </View>
-                <Text style={[styles.ratingNumber, { color: rankColor }]}>
-                  {rating}
+          <Text style={styles.cardTitle}>ROLE RANKINGS</Text>
+          {sortedRoles.map(({ role, rating }) => (
+            <View key={role} style={styles.roleRow}>
+              <View>
+                <Text style={styles.roleName}>{role}</Text>
+                <Text style={[styles.rankTitle, { color: getRankColor(rating) }]}>
+                  {getRankTitle(rating)}
                 </Text>
               </View>
-            );
-          })}
-        </View>
-
-        {/* Badges */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>BADGES</Text>
-          {player.badges.length > 0 ? (
-            <View style={styles.badgeGrid}>
-              {player.badges.map((badge) => (
-                <View key={badge.id} style={styles.badgeItem}>
-                  <Text style={styles.badgeIcon}>{badge.icon}</Text>
-                  <Text style={styles.badgeName}>{badge.name}</Text>
-                </View>
-              ))}
+              <Text style={styles.ratingValue}>{Math.round(rating)}</Text>
             </View>
-          ) : (
-            <View style={styles.noBadges}>
-              <Text style={styles.noBadgesEmoji}>🏅</Text>
-              <Text style={styles.noBadgesText}>
-                Play matches to earn badges!
-              </Text>
-            </View>
-          )}
+          ))}
         </View>
 
         {/* Wallet Info */}
@@ -211,49 +182,103 @@ export default function ProfileScreen({ player, onNavigate, walletBalance, onDis
               <Text style={styles.disconnectText}>Disconnect Wallet</Text>
             </TouchableOpacity>
           )}
-
-          {/* Join Champions Simulation */}
-          {!player.isSkrStaker && walletBalance && walletBalance.skr > 0 && onUpdatePlayer && (
-            <TouchableOpacity
-              style={styles.stakeButton}
-              onPress={() => onUpdatePlayer({ isSkrStaker: true })}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={['#8A2BE2', '#4B0082']}
-                style={styles.stakeGradient}
-              >
-                <Text style={styles.stakeText}>💎 Join Seeker Champions</Text>
-                <Text style={styles.stakeSub}>Stake your SKR for 1.5x XP</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
         </View>
+
+        {/* Security Section (Only for self) */}
+        {onUpdatePassword && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>SECURITY</Text>
+            <View style={styles.walletRow}>
+              <Text style={styles.walletLabel}>Identity</Text>
+              <Text style={styles.walletValue}>Protected by Wallet & Password</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.changePasswordButton}
+              onPress={() => setIsChangingPassword(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.changePasswordText}>Change Password</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Staking / Missions */}
+        {!player.isSkrStaker && walletBalance && walletBalance.skr > 0 && onUpdatePlayer && (
+          <TouchableOpacity
+            style={styles.stakeButton}
+            onPress={() => onUpdatePlayer({ isSkrStaker: true })}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={['#8A2BE2', '#4B0082']}
+              style={styles.stakeGradient}
+            >
+              <Text style={styles.stakeText}>💎 Join Seeker Champions</Text>
+              <Text style={styles.stakeSub}>Stake your SKR for 1.5x XP</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+        <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Bottom Nav */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('home')}>
-          <Text style={styles.navIcon}>🏠</Text>
-          <Text style={styles.navLabel}>Home</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('leaderboard')}>
-          <Text style={styles.navIcon}>🏆</Text>
-          <Text style={styles.navLabel}>Ranks</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('quests')}>
-          <Text style={styles.navIcon}>📋</Text>
-          <Text style={styles.navLabel}>Quests</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('history')}>
-          <Text style={styles.navIcon}>⚔️</Text>
-          <Text style={styles.navLabel}>History</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => {}}>
-          <Text style={[styles.navIcon, styles.navActive]}>👤</Text>
-          <Text style={[styles.navLabel, styles.navActive]}>Profile</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Change Password Modal */}
+      <Modal
+        visible={isChangingPassword}
+        transparent
+        animationType="fade"
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>CHANGE PASSWORD</Text>
+            <Text style={styles.modalSubtitle}>
+              Set a secret password to recover your profile on other devices.
+            </Text>
+
+            <TextInput
+              style={styles.passwordInput}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="New secret password..."
+              placeholderTextColor={colors.textDim}
+              secureTextEntry
+              autoFocus
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={styles.modalCancel}
+                onPress={() => {
+                  setIsChangingPassword(false);
+                  setNewPassword('');
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[
+                  styles.modalConfirm,
+                  newPassword.length < 6 && { opacity: 0.5 }
+                ]}
+                disabled={newPassword.length < 6}
+                onPress={async () => {
+                  if (onUpdatePassword) {
+                    await onUpdatePassword(newPassword);
+                    setIsChangingPassword(false);
+                    setNewPassword('');
+                    Alert.alert("Success", "Password updated successfully!");
+                  }
+                }}
+              >
+                <Text style={styles.modalConfirmText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -268,228 +293,181 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.lg,
-    paddingTop: 56,
+    paddingTop: 60,
     paddingBottom: 20,
   },
-
-  // Profile Header
   profileHeader: {
     alignItems: 'center',
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.xl,
   },
   avatarRing: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    padding: 3,
+    marginBottom: spacing.md,
   },
   avatarInner: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
+    flex: 1,
     backgroundColor: colors.bg,
+    borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    fontSize: fontSize.display,
-    fontWeight: fontWeight.extrabold,
+    fontSize: 40,
+    fontWeight: fontWeight.bold,
     color: colors.primary,
   },
   username: {
-    fontSize: fontSize.xxl,
-    fontWeight: fontWeight.extrabold,
+    fontSize: 24,
+    fontWeight: fontWeight.bold,
     color: colors.text,
-    marginTop: spacing.md,
   },
   seekerId: {
-    fontSize: fontSize.sm,
+    fontSize: 14,
     color: colors.textSecondary,
-    marginTop: spacing.xs,
+    marginTop: 4,
+  },
+  twitterHandle: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: fontWeight.medium,
+    marginTop: 4,
   },
   skrStakerBadge: {
-    backgroundColor: colors.purpleDim,
-    borderRadius: borderRadius.full,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    marginTop: spacing.md,
+    backgroundColor: colors.purple + '22',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: colors.purple + '44',
   },
   skrStakerText: {
-    fontSize: fontSize.xs,
     color: colors.purple,
-    fontWeight: fontWeight.semibold,
+    fontSize: 12,
+    fontWeight: fontWeight.bold,
   },
-
-  // Card
   card: {
     backgroundColor: colors.bgCard,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
     marginBottom: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
   },
   cardTitle: {
-    fontSize: fontSize.xs,
+    fontSize: 12,
     fontWeight: fontWeight.bold,
-    color: colors.textSecondary,
-    letterSpacing: 1,
+    color: colors.textDim,
+    letterSpacing: 1.5,
     marginBottom: spacing.lg,
   },
-
-  // Level
   levelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: spacing.sm,
+  },
+  levelLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  levelValue: {
+    fontSize: 32,
+    fontWeight: fontWeight.bold,
+    color: colors.primary,
+  },
+  xpBarBg: {
+    height: 10,
+    backgroundColor: colors.bg,
+    borderRadius: 5,
+    marginBottom: spacing.sm,
+    overflow: 'hidden',
+  },
+  xpBarFill: {
+    height: '100%',
+    borderRadius: 5,
+  },
+  xpText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  totalXp: {
+    fontSize: 10,
+    color: colors.textDim,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statBox: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 4,
+  },
+  roleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: spacing.md,
   },
-  levelLabel: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    fontWeight: fontWeight.medium,
-  },
-  levelValue: {
-    fontSize: fontSize.xxxl,
-    fontWeight: fontWeight.extrabold,
-    color: colors.primary,
-  },
-  xpBarBg: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.bgElevated,
-    overflow: 'hidden',
-  },
-  xpBarFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  xpText: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  totalXp: {
-    fontSize: fontSize.xs,
-    color: colors.textDim,
-    marginTop: 2,
-  },
-
-  // Stats
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  statBox: {
-    width: '30%',
-    backgroundColor: colors.bgElevated,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.extrabold,
-    color: colors.text,
-  },
-  statLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-
-  // Ratings
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  ratingInfo: {
-    flex: 1,
-  },
-  ratingRole: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
-  },
-  ratingRank: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium,
-    marginTop: 2,
-  },
-  ratingNumber: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.extrabold,
-  },
-
-  // Badges
-  badgeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  badgeItem: {
-    alignItems: 'center',
-    width: 72,
-  },
-  badgeIcon: {
-    fontSize: 28,
-    marginBottom: spacing.xs,
-  },
-  badgeName: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  noBadges: {
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
-  },
-  noBadgesEmoji: {
-    fontSize: 32,
-    marginBottom: spacing.sm,
-  },
-  noBadgesText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-
-  // Wallet
-  walletRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-  },
-  walletLabel: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-  walletValue: {
-    fontSize: fontSize.sm,
+  roleName: {
+    fontSize: 16,
     fontWeight: fontWeight.bold,
     color: colors.text,
   },
+  rankTitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  ratingValue: {
+    fontSize: 18,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+  },
+  walletRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  walletLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  walletValue: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: fontWeight.medium,
+  },
   disconnectButton: {
-    marginTop: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.danger,
-    alignItems: 'center' as const,
+    borderColor: '#ff444444',
+    borderRadius: radius.md,
+    alignItems: 'center',
   },
   disconnectText: {
+    color: '#ff4444',
     fontSize: fontSize.sm,
-    color: colors.danger,
-    fontWeight: fontWeight.semibold,
+    fontWeight: fontWeight.bold,
   },
   stakeButton: {
-    marginTop: spacing.xl,
-    borderRadius: borderRadius.lg,
+    borderRadius: radius.xl,
     overflow: 'hidden',
   },
   stakeGradient: {
@@ -498,38 +476,89 @@ const styles = StyleSheet.create({
   },
   stakeText: {
     color: '#fff',
-    fontSize: fontSize.md,
+    fontSize: 16,
     fontWeight: fontWeight.bold,
   },
   stakeSub: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 10,
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
     marginTop: 4,
   },
-
-  // Bottom nav
-  bottomNav: {
-    flexDirection: 'row',
-    backgroundColor: colors.bgElevated,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingBottom: 20,
-    paddingTop: spacing.sm,
-  },
-  navItem: {
-    flex: 1,
+  changePasswordButton: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.primary + '44',
+    borderRadius: radius.md,
     alignItems: 'center',
-    paddingVertical: spacing.xs,
   },
-  navIcon: {
-    fontSize: 20,
-    marginBottom: 2,
-  },
-  navLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-  },
-  navActive: {
+  changePasswordText: {
     color: colors.primary,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  modalContent: {
+    backgroundColor: colors.bgCard,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: colors.primary + '22',
+  },
+  modalTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    color: colors.primary,
+    marginBottom: spacing.xs,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
+  },
+  passwordInput: {
+    backgroundColor: colors.bg,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    color: colors.text,
+    fontSize: fontSize.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  modalCancel: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: colors.textDim,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
+  },
+  modalConfirm: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    color: colors.bg,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
   },
 });

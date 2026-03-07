@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { createPlayer, getPlayer, updatePlayer, getDailyQuests } from '../services/db/neon';
+import { createPlayer, getPlayer, updatePlayer, getDailyQuests, loginPlayer } from '../services/db/neon';
 import { Player, DailyQuest } from '../types';
 import { UserRole, DEFAULT_RATING, ROLES } from '../config/constants';
 
@@ -13,9 +13,12 @@ export interface UseAuthReturn {
     walletAddress: string,
     username: string,
     primaryRole: UserRole,
+    password?: string,
+    twitter?: string,
     seekerId?: string
   ) => Promise<void>;
   refreshPlayer: () => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   signOut: () => void;
   error: string | null;
 }
@@ -72,6 +75,8 @@ export function useAuth(): UseAuthReturn {
       walletAddress: string,
       username: string,
       primaryRole: UserRole,
+      password?: string,
+      twitter?: string,
       seekerId?: string
     ) => {
       setLoading(true);
@@ -80,7 +85,9 @@ export function useAuth(): UseAuthReturn {
           walletAddress,
           seekerId || '',
           username,
-          primaryRole
+          primaryRole,
+          password,
+          twitter
         );
         setPlayer(newPlayer);
         setIsNewUser(false);
@@ -118,6 +125,32 @@ export function useAuth(): UseAuthReturn {
     }
   }, [currentWallet]);
 
+  // Traditional login with username/password
+  const login = useCallback(async (username: string, password: string) => {
+    if (!currentWallet) throw new Error('Connect wallet first');
+    setLoading(true);
+    setError(null);
+    try {
+      const p = await loginPlayer(username, password, currentWallet);
+      if (p) {
+        setPlayer(p);
+        setIsNewUser(false);
+        // Refresh quests
+        try {
+          const quests = await getDailyQuests(currentWallet);
+          setDailyQuests(quests);
+        } catch (err) {}
+      } else {
+        throw new Error('Invalid username or password');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Login failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [currentWallet]);
+
   // Sign out
   const signOut = useCallback(() => {
     setPlayer(null);
@@ -134,6 +167,7 @@ export function useAuth(): UseAuthReturn {
     signIn,
     createProfile,
     refreshPlayer,
+    login,
     signOut,
     error,
   };

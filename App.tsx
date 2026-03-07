@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 
 import ConnectWalletScreen from './src/screens/ConnectWalletScreen';
 import HomeScreen from './src/screens/HomeScreen';
@@ -20,7 +20,7 @@ import { Player, Match, Question, DailyQuest, LeaderboardEntry } from './src/typ
 import { calculateMatchRatings, calculateDrawRatings, calculateXP } from './src/services/matchmaking/ratingSystem';
 import { generateQuestionsFromNews, fetchLatestNews, generateFallbackQuestions } from './src/services/ai/questionGenerator';
 import { filterSeenQuestions, markQuestionsAsSeen } from './src/services/ai/antiCheat';
-import { getLeaderboard, persistMatchResult, updatePlayer } from './src/services/db/neon';
+import { getLeaderboard, persistMatchResult, updatePlayer, getPlayerById, updatePassword } from './src/services/db/neon';
 import { createEscrow, depositWager, resolveEscrow } from './src/services/wallet/escrow';
 import { joinQueue, leaveQueue, pollForMatch, submitAnswerAndPoll, pollMatchState, finishLiveMatch } from './src/services/matchmaking/liveMatchmaking';
 
@@ -52,6 +52,7 @@ export default function App() {
   const [ratingResult, setRatingResult] = useState<any>(null);
   const [xpEarned, setXpEarned] = useState(0);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
+  const [viewedPlayer, setViewedPlayer] = useState<Player | null>(null);
   const [leaderboardCache, setLeaderboardCache] = useState<Record<string, LeaderboardEntry[]>>({});
   const [appReady, setAppReady] = useState(false);
   const matchSearchSession = React.useRef(0);
@@ -126,14 +127,27 @@ export default function App() {
     await wallet.devConnect();
   }, [wallet]);
 
-  const handlePhantomConnect = useCallback(async () => {
-    await wallet.connectPhantomWallet();
-  }, [wallet]);
 
   const handleCreateProfile = useCallback(
-    async (username: string, role: UserRole) => {
+    async (username: string, role: UserRole, password?: string, twitter?: string) => {
       if (!wallet.address) return;
-      await authHook.createProfile(wallet.address, username, role);
+      await authHook.createProfile(wallet.address, username, role, password, twitter);
+    },
+    [wallet.address, authHook]
+  );
+
+  const handleLogin = useCallback(
+    async (username: string, password: string) => {
+      await authHook.login(username, password);
+    },
+    [authHook]
+  );
+
+  const handleUpdatePassword = useCallback(
+    async (newPassword: string) => {
+      if (!wallet.address) return;
+      await updatePassword(wallet.address, newPassword);
+      await authHook.refreshPlayer();
     },
     [wallet.address, authHook]
   );
@@ -488,6 +502,24 @@ export default function App() {
     setSelectedRole(role);
   }, []);
 
+  const handleViewProfile = useCallback(async (playerId: string) => {
+    if (authHook.player && playerId === authHook.player.id) {
+      setViewedPlayer(null); // Reset to own profile
+      setCurrentScreen('profile');
+      return;
+    }
+
+    try {
+      const p = await getPlayerById(playerId);
+      if (p) {
+        setViewedPlayer(p);
+        setCurrentScreen('profile');
+      }
+    } catch (err) {
+      console.warn('[App] Failed to fetch viewed player:', err);
+    }
+  }, [authHook.player]);
+
   // ─── Loading splash ────────────────────────────────────
   if (!appReady) {
     return (
@@ -506,9 +538,9 @@ export default function App() {
         <StatusBar style="light" backgroundColor={colors.bg} />
         <ConnectWalletScreen
           onConnect={handleWalletConnect}
-          onPhantomConnect={handlePhantomConnect}
           onDevConnect={handleDevConnect}
           onCreateProfile={handleCreateProfile}
+          onLogin={handleLogin}
           connecting={wallet.connecting}
           isNewUser={authHook.isNewUser}
           walletAddress={wallet.address}
@@ -603,22 +635,27 @@ export default function App() {
             selectedRole={selectedRole}
             onNavigate={handleNavigate}
             onRoleChange={handleLeaderboardRoleChange}
+            onViewProfile={handleViewProfile}
           />
         );
       case 'profile':
         return (
           <ProfileScreen
-            player={player}
-            onNavigate={handleNavigate}
-            walletBalance={wallet.balance}
-            onDisconnect={async () => {
+            player={viewedPlayer || player}
+            onNavigate={(s) => {
+              setViewedPlayer(null);
+              handleNavigate(s);
+            }}
+            walletBalance={viewedPlayer ? undefined : wallet.balance}
+            onDisconnect={viewedPlayer ? undefined : async () => {
               await wallet.disconnect();
               authHook.signOut();
             }}
-            onUpdatePlayer={async (data) => {
+            onUpdatePlayer={viewedPlayer ? undefined : async (data) => {
               await updatePlayer(player.walletAddress, data);
               await authHook.refreshPlayer();
             }}
+            onUpdatePassword={viewedPlayer ? undefined : handleUpdatePassword}
           />
         );
       case 'history':
@@ -647,10 +684,75 @@ export default function App() {
     }
   };
 
+  const renderBottomNav = () => {
+    const mainScreens = ['home', 'leaderboard', 'quests', 'history', 'profile'];
+    if (!authHook.player || !mainScreens.includes(currentScreen)) return null;
+
+    return (
+      <View style={styles.bottomNav}>
+        <TouchableOpacity 
+          style={styles.navItem} 
+          onPress={() => {
+            setViewedPlayer(null);
+            handleNavigate('home');
+          }}
+        >
+          <Text style={[styles.navIcon, currentScreen === 'home' && styles.navActive]}>🏠</Text>
+          <Text style={[styles.navLabel, currentScreen === 'home' && styles.navActive]}>Home</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.navItem} 
+          onPress={() => {
+            setViewedPlayer(null);
+            handleNavigate('leaderboard');
+          }}
+        >
+          <Text style={[styles.navIcon, currentScreen === 'leaderboard' && styles.navActive]}>🏆</Text>
+          <Text style={[styles.navLabel, currentScreen === 'leaderboard' && styles.navActive]}>Ranks</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.navItem} 
+          onPress={() => {
+            setViewedPlayer(null);
+            handleNavigate('quests');
+          }}
+        >
+          <Text style={[styles.navIcon, currentScreen === 'quests' && styles.navActive]}>📋</Text>
+          <Text style={[styles.navLabel, currentScreen === 'quests' && styles.navActive]}>Quests</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.navItem} 
+          onPress={() => {
+            setViewedPlayer(null);
+            handleNavigate('history');
+          }}
+        >
+          <Text style={[styles.navIcon, currentScreen === 'history' && styles.navActive]}>⚔️</Text>
+          <Text style={[styles.navLabel, currentScreen === 'history' && styles.navActive]}>History</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.navItem} 
+          onPress={() => {
+            setViewedPlayer(null);
+            handleNavigate('profile');
+          }}
+        >
+          <Text style={[styles.navIcon, (currentScreen === 'profile' && !viewedPlayer) && styles.navActive]}>👤</Text>
+          <Text style={[styles.navLabel, (currentScreen === 'profile' && !viewedPlayer) && styles.navActive]}>Profile</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar style="light" backgroundColor={colors.bg} />
       {renderScreen()}
+      {renderBottomNav()}
     </View>
   );
 }
@@ -659,6 +761,37 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  bottomNav: {
+    flexDirection: 'row',
+    backgroundColor: colors.bgElevated,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingBottom: 20,
+    paddingTop: spacing.sm,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+  },
+  navItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+  },
+  navIcon: {
+    fontSize: 20,
+    marginBottom: 2,
+    color: colors.textSecondary,
+  },
+  navLabel: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    fontWeight: fontWeight.medium,
+  },
+  navActive: {
+    color: colors.primary,
   },
   loadingContainer: {
     flex: 1,

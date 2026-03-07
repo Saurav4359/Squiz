@@ -19,7 +19,9 @@ async function ensureTables() {
           id SERIAL PRIMARY KEY,
           walletAddress TEXT UNIQUE NOT NULL,
           seekerId TEXT,
-          username TEXT NOT NULL,
+          username TEXT UNIQUE NOT NULL,
+          password TEXT,
+          twitter TEXT,
           primaryRole TEXT,
           rating INTEGER DEFAULT 1200,
           matchesPlayed INTEGER DEFAULT 0,
@@ -39,6 +41,12 @@ async function ensureTables() {
       await sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS isskrstaker BOOLEAN DEFAULT FALSE`;
       await sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS skrbalance DECIMAL DEFAULT 0`;
       await sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS role_ratings JSONB DEFAULT '{}'::jsonb`;
+      await sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS password TEXT`;
+      await sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS twitter TEXT`;
+      // Try to add unique constraint - if it fails it's probably because it already exists
+      try {
+        await sql`ALTER TABLE players ADD CONSTRAINT unique_username UNIQUE (username)`;
+      } catch (e) {}
     } catch (err) {
       console.warn('[Neon] Migration: players columns update failed or already done:', err);
     }
@@ -140,16 +148,90 @@ export async function getPlayer(walletAddress: string): Promise<Player | null> {
     badges: [],
     isSkrStaker: p.isskrstaker || false,
     skrBalance: Number(p.skrbalance) || 0,
+    password: p.password,
+    twitter: p.twitter,
     createdAt: Number(p.createdat) || Date.now(),
     lastActiveAt: Number(p.lastactiveat) || Date.now(),
   };
+}
+
+export async function getPlayerById(playerId: string): Promise<Player | null> {
+  await ensureTables();
+  const idValue = isNaN(Number(playerId)) ? 0 : Number(playerId);
+  if (idValue === 0) return null;
+  
+  const result = await sql`SELECT * FROM players WHERE id = ${idValue} LIMIT 1`;
+
+  if (result.length === 0) return null;
+  
+  const p = result[0];
+  const roleRatings = p.role_ratings || {};
+  const ratings: Record<UserRole, number> = {} as any;
+  ROLES.forEach(r => {
+    ratings[r] = roleRatings[r] ? Number(roleRatings[r]) : 1200;
+  });
+  if (ratings[p.primaryrole as UserRole] === 1200 && p.rating) {
+      ratings[p.primaryrole as UserRole] = p.rating;
+  }
+
+  return {
+    id: String(p.id),
+    walletAddress: p.walletaddress,
+    seekerId: p.seekerid,
+    username: p.username,
+    roles: [p.primaryrole as UserRole],
+    primaryRole: p.primaryrole as UserRole,
+    ratings,
+    xp: Number(p.xp) || 0,
+    level: calculateLevel(Number(p.xp) || 0),
+    matchesPlayed: p.matchesplayed || 0,
+    matchesWon: p.wins || 0,
+    currentStreak: 0,
+    bestStreak: 0,
+    avgReactionTime: 0,
+    badges: [],
+    isSkrStaker: p.isskrstaker || false,
+    skrBalance: Number(p.skrbalance) || 0,
+    password: p.password,
+    twitter: p.twitter,
+    createdAt: Number(p.createdat) || Date.now(),
+    lastActiveAt: Number(p.lastactiveat) || Date.now(),
+  };
+}
+
+export async function checkUsernameUnique(username: string): Promise<boolean> {
+  await ensureTables();
+  const result = await sql`SELECT 1 FROM players WHERE LOWER(username) = LOWER(${username}) LIMIT 1`;
+  return result.length === 0;
+}
+
+export async function loginPlayer(username: string, password: string, currentWallet: string): Promise<Player | null> {
+  await ensureTables();
+  const result = await sql`SELECT * FROM players WHERE LOWER(username) = LOWER(${username}) AND password = ${password} LIMIT 1`;
+
+  if (result.length === 0) return null;
+
+  const player = result[0];
+  
+  // Update wallet address to the currently connected one
+  await sql`UPDATE players SET walletAddress = ${currentWallet} WHERE id = ${player.id}`;
+
+  const p = await getPlayer(currentWallet);
+  return p;
+}
+
+export async function updatePassword(walletAddress: string, newPassword: string): Promise<void> {
+  await ensureTables();
+  await sql`UPDATE players SET password = ${newPassword} WHERE walletAddress = ${walletAddress}`;
 }
 
 export async function createPlayer(
   walletAddress: string,
   seekerId: string,
   username: string,
-  primaryRole: UserRole
+  primaryRole: UserRole,
+  password?: string,
+  twitter?: string
 ): Promise<Player> {
   await ensureTables();
   const now = Date.now();
@@ -157,9 +239,9 @@ export async function createPlayer(
   
   const result = await sql`
     INSERT INTO players (
-      walletAddress, seekerId, username, primaryRole, rating, matchesPlayed, wins, losses, createdAt, lastActiveAt
+      walletAddress, seekerId, username, primaryRole, rating, matchesPlayed, wins, losses, password, twitter, createdAt, lastActiveAt
     ) VALUES (
-      ${walletAddress}, ${seekerId}, ${username}, ${primaryRole}, ${rating}, 0, 0, 0, ${now}, ${now}
+      ${walletAddress}, ${seekerId}, ${username}, ${primaryRole}, ${rating}, 0, 0, 0, ${password || null}, ${twitter || null}, ${now}, ${now}
     ) RETURNING *
   `;
   
@@ -186,6 +268,8 @@ export async function createPlayer(
     badges: [],
     isSkrStaker: p.isskrstaker || false,
     skrBalance: Number(p.skrbalance) || 0,
+    password: p.password,
+    twitter: p.twitter,
     createdAt: Number(p.createdat) || Date.now(),
     lastActiveAt: Number(p.lastactiveat) || Date.now(),
   };
@@ -211,8 +295,8 @@ export async function updatePlayer(walletAddress: string, data: Partial<Player>)
   queryStr += setClauses.join(', ') + ` WHERE walletAddress = $${index}`;
   values.push(walletAddress);
   
-  // Need to bypass neon template string strictly for dynamic updates, using string parsing workaround:
-  const query = await sql(queryStr as any, values);
+  // Need to use sql.query for conventional function call with placeholders
+  const query = await sql.query(queryStr, values);
 }
 
 // ─── Daily Quests ──────────────────────────────────────────────

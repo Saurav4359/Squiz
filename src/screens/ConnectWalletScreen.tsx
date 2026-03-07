@@ -12,18 +12,20 @@ import {
   Dimensions,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
 import { ROLES, UserRole } from '../config/constants';
+import { checkUsernameUnique } from '../services/db/neon';
 
 const { width } = Dimensions.get('window');
 
 interface ConnectWalletScreenProps {
   onConnect: () => Promise<void>;
-  onPhantomConnect?: () => Promise<void>;
   onDevConnect: () => Promise<void>;
-  onCreateProfile: (username: string, role: UserRole) => Promise<void>;
+  onCreateProfile: (username: string, role: UserRole, password?: string, twitter?: string) => Promise<void>;
+  onLogin: (username: string, password: string) => Promise<void>;
   connecting: boolean;
   isNewUser: boolean;
   walletAddress: string | null;
@@ -34,9 +36,9 @@ interface ConnectWalletScreenProps {
 
 export default function ConnectWalletScreen({
   onConnect,
-  onPhantomConnect,
   onDevConnect,
   onCreateProfile,
+  onLogin,
   connecting,
   isNewUser,
   walletAddress,
@@ -45,8 +47,13 @@ export default function ConnectWalletScreen({
   loading,
 }: ConnectWalletScreenProps) {
   const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [twitter, setTwitter] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole>('Trader');
+  const [isLoginMode, setIsLoginMode] = useState(false);
   const [devPressCount, setDevPressCount] = useState(0);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   // Animations
   const logoScale = useRef(new Animated.Value(0)).current;
@@ -121,11 +128,44 @@ export default function ConnectWalletScreen({
     setTimeout(() => setDevPressCount(0), 2000);
   };
 
-  const handleCreateProfile = () => {
+  const handleAuthAction = async () => {
     const trimmed = username.trim();
     if (trimmed.length < 3) return;
-    if (trimmed.length > 16) return;
-    onCreateProfile(trimmed, selectedRole);
+    
+    if (password.trim().length < 6) {
+      setLocalError('Password must be at least 6 characters');
+      return;
+    }
+
+    setCheckingUsername(true);
+    setLocalError(null);
+    try {
+      if (isLoginMode) {
+        await onLogin(trimmed, password.trim());
+      } else {
+        const isUnique = await checkUsernameUnique(trimmed);
+        if (!isUnique) {
+          setLocalError('Username is already taken. Use "Login" if you already have an account.');
+          setCheckingUsername(false);
+          return;
+        }
+        await onCreateProfile(trimmed, selectedRole, password.trim(), twitter.trim() || undefined);
+      }
+    } catch (err: any) {
+      setLocalError(err?.message || 'Authentication failed');
+    } finally {
+      setCheckingUsername(false);
+    }
+  };
+
+  const handleShowRecoveryHelp = () => {
+    Alert.alert(
+      "Account Recovery Help",
+      "1. FORGOT USERNAME?\nConnect your ORIGINAL wallet address. SeekerRank will recognize you and log you in automatically.\n\n" +
+      "2. FORGOT PASSWORD?\nIf you have your original wallet connected, you can reset your password in Profile Settings.\n\n" +
+      "3. NEW WALLET?\nIf you are using a new wallet address, you MUST remember your old Username and Password to link your profile to this new device.",
+      [{ text: "OK", style: "default" }]
+    );
   };
 
   const renderPulseRing = (ring: Animated.Value, size: number) => {
@@ -202,15 +242,14 @@ export default function ConnectWalletScreen({
           <Animated.View
             style={[styles.formContainer, { transform: [{ translateY: formSlide }] }]}
           >
-            {/* Connected badge */}
-            <View style={styles.connectedBadge}>
-              <View style={styles.connectedDot} />
-              <Text style={styles.connectedText}>{shortAddress}</Text>
-            </View>
-
-            <Text style={styles.onboardTitle}>CREATE YOUR PROFILE</Text>
+            <Text style={styles.onboardTitle}>
+              {isLoginMode ? 'WELCOME BACK' : 'CREATE YOUR PROFILE'}
+            </Text>
             <Text style={styles.onboardSubtitle}>
-              Choose your identity on SeekerRank
+              {isLoginMode 
+                ? 'Enter your credentials to continue'
+                : 'Choose your identity on SeekerRank'
+              }
             </Text>
 
             {/* Username Input */}
@@ -219,53 +258,121 @@ export default function ConnectWalletScreen({
               <TextInput
                 style={styles.textInput}
                 value={username}
-                onChangeText={setUsername}
-                placeholder="Enter username..."
+                onChangeText={(text) => {
+                  setUsername(text);
+                  setLocalError(null);
+                }}
+                placeholder="Your unique alias..."
                 placeholderTextColor={colors.textDim}
                 maxLength={16}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              <Text style={styles.charCount}>{username.length}/16</Text>
+              {!isLoginMode && <Text style={styles.charCount}>{username.length}/16</Text>}
             </View>
 
-            {/* Role Selection */}
-            <Text style={styles.inputLabel}>PRIMARY ROLE</Text>
-            <View style={styles.roleGrid}>
-              {ROLES.map((role) => (
-                <TouchableOpacity
-                  key={role}
-                  style={[
-                    styles.roleOption,
-                    selectedRole === role && styles.roleOptionActive,
-                  ]}
-                  onPress={() => setSelectedRole(role)}
-                >
-                  <Text
-                    style={[
-                      styles.roleOptionText,
-                      selectedRole === role && styles.roleOptionTextActive,
-                    ]}
-                  >
-                    {role}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            {/* Password Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>PASSWORD</Text>
+              <TextInput
+                style={styles.textInput}
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  setLocalError(null);
+                }}
+                placeholder="Your secure password..."
+                placeholderTextColor={colors.textDim}
+                secureTextEntry
+                autoCapitalize="none"
+              />
             </View>
+
+            {!isLoginMode && (
+              <>
+                {/* Twitter Input */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>X (TWITTER) USERNAME (OPTIONAL)</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={twitter}
+                    onChangeText={setTwitter}
+                    placeholder="@username"
+                    placeholderTextColor={colors.textDim}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+
+                {/* Role Selection */}
+                <Text style={styles.inputLabel}>PRIMARY ROLE</Text>
+                <View style={styles.roleGrid}>
+                  {ROLES.map((role) => (
+                    <TouchableOpacity
+                      key={role}
+                      style={[
+                        styles.roleOption,
+                        selectedRole === role && styles.roleOptionActive,
+                      ]}
+                      onPress={() => setSelectedRole(role)}
+                    >
+                      <Text
+                        style={[
+                          styles.roleOptionText,
+                          selectedRole === role && styles.roleOptionTextActive,
+                        ]}
+                      >
+                        {role}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
+
+            {/* Recovery Help Button */}
+            <TouchableOpacity 
+              style={styles.recoveryHelpButton} 
+              onPress={handleShowRecoveryHelp}
+            >
+              <Text style={styles.recoveryHelpText}>Forgot credentials or need help?</Text>
+            </TouchableOpacity>
+
+            {/* Toggle Login/Signup */}
+            <TouchableOpacity 
+              style={styles.toggleModeButton} 
+              onPress={() => {
+                setIsLoginMode(!isLoginMode);
+                setLocalError(null);
+              }}
+            >
+              <Text style={styles.toggleModeText}>
+                {isLoginMode 
+                  ? "Don't have a profile? Create one" 
+                  : "Already have a profile? Login here"}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Local Error */}
+            {(localError || error) && (
+              <View style={[styles.errorContainer, { width: '100%', marginBottom: spacing.lg }]}>
+                <Text style={styles.errorText}>{localError || error}</Text>
+              </View>
+            )}
 
             {/* Create Button */}
             <TouchableOpacity
               style={[
                 styles.createButton,
-                username.trim().length < 3 && styles.createButtonDisabled,
+                (username.trim().length < 3 || password.trim().length < 6) && styles.createButtonDisabled,
               ]}
-              onPress={handleCreateProfile}
-              disabled={username.trim().length < 3 || loading}
+              onPress={handleAuthAction}
+              disabled={username.trim().length < 3 || password.trim().length < 6 || loading || checkingUsername}
               activeOpacity={0.8}
             >
               <LinearGradient
                 colors={
-                  username.trim().length >= 3
+                  username.trim().length >= 3 && password.trim().length >= 6
                     ? colors.gradientPrimary
                     : (['#333', '#333'] as const)
                 }
@@ -273,11 +380,11 @@ export default function ConnectWalletScreen({
                 end={{ x: 1, y: 0 }}
                 style={styles.createButtonGradient}
               >
-                {loading ? (
+                {loading || checkingUsername ? (
                   <ActivityIndicator color={colors.bg} size="small" />
                 ) : (
                   <Text style={styles.createButtonText}>
-                    ENTER THE ARENA
+                    {isLoginMode ? 'LOGIN' : 'ENTER THE ARENA'}
                   </Text>
                 )}
               </LinearGradient>
@@ -364,35 +471,6 @@ export default function ConnectWalletScreen({
             Android MWA Supported
           </Text>
 
-          {/* Phantom Fallback Button */}
-          {onPhantomConnect && (
-            <TouchableOpacity
-              style={[styles.connectButton, { marginTop: spacing.md }]}
-              onPress={onPhantomConnect}
-              disabled={connecting}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={['#ab9ff2', '#512da8'] as const}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.connectGradient}
-              >
-                {connecting ? (
-                  <ActivityIndicator color={colors.bg} size="small" />
-                ) : (
-                  <>
-                    <Text style={styles.connectIcon}>👻</Text>
-                    <Text style={styles.connectText}>PHANTOM (UNIVERSAL)</Text>
-                  </>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
-
-          <Text style={styles.walletHint}>
-            Universal App link for iOS/Expo Phantom
-          </Text>
 
           {/* Error */}
           {error && (
@@ -400,7 +478,7 @@ export default function ConnectWalletScreen({
               <Text style={styles.errorText}>{error}</Text>
               
               {/* Show Dev Connect explicitly if MWA is the issue */}
-              {(error.includes('MWA not available') || error.includes('Firebase Auth') || devPressCount > 0) && (
+              {__DEV__ && (error.includes('MWA not available') || error.includes('Firebase Auth') || devPressCount > 0) && (
                 <TouchableOpacity 
                   style={styles.devBypassButton}
                   onPress={onDevConnect}
@@ -606,6 +684,26 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     textAlign: 'center',
     paddingBottom: spacing.xl,
+  },
+  toggleModeButton: {
+    paddingVertical: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  toggleModeText: {
+    fontSize: fontSize.sm,
+    color: colors.primary,
+    fontWeight: fontWeight.bold,
+    textAlign: 'center',
+  },
+  recoveryHelpButton: {
+    marginBottom: spacing.xl,
+    paddingVertical: spacing.xs,
+  },
+  recoveryHelpText: {
+    fontSize: fontSize.xs,
+    color: colors.textDim,
+    textDecorationLine: 'underline',
+    textAlign: 'center',
   },
 
   // ─── Onboarding Form ─────────────────────────────────

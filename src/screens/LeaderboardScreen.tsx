@@ -21,6 +21,7 @@ interface LeaderboardScreenProps {
   selectedRole: UserRole;
   onNavigate: (screen: string) => void;
   onRoleChange: (role: UserRole) => void;
+  onViewProfile: (playerId: string) => void;
 }
 
 export default function LeaderboardScreen({
@@ -29,6 +30,7 @@ export default function LeaderboardScreen({
   selectedRole,
   onNavigate,
   onRoleChange,
+  onViewProfile,
 }: LeaderboardScreenProps) {
   const [selectedTab, setSelectedTab] = useState<'global' | 'skr'>('global');
   const [refreshing, setRefreshing] = useState(false);
@@ -58,7 +60,11 @@ export default function LeaderboardScreen({
     const displayRank = index + 1;
 
     return (
-      <View style={[styles.entryRow, isMe && styles.entryRowMe]}>
+      <TouchableOpacity 
+        style={[styles.entryRow, isMe && styles.entryRowMe]}
+        onPress={() => onViewProfile(item.playerId)}
+        activeOpacity={0.7}
+      >
         <View style={styles.rankCol}>
           <Text style={styles.rankText}>{displayRank}</Text>
         </View>
@@ -75,7 +81,7 @@ export default function LeaderboardScreen({
           <Text style={[styles.ratingValue, { color: rankColor }]}>{item.rating}</Text>
           <Text style={styles.ratingLabel}>{item.winRate}% WR</Text>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -134,21 +140,6 @@ export default function LeaderboardScreen({
         }
       />
 
-      {/* Bottom Nav */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('home')}>
-          <Text style={styles.navIcon}>🏠</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => {}}>
-          <Text style={[styles.navIcon, styles.navActive]}>🏆</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('quests')}>
-          <Text style={styles.navIcon}>📋</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => onNavigate('profile')}>
-          <Text style={styles.navIcon}>👤</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }

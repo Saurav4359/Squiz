@@ -19,6 +19,8 @@ export interface Player {
   badges: Badge[];
   isSkrStaker: boolean;
   skrBalance: number;
+  password?: string;
+  twitter?: string;
   createdAt: number;
   lastActiveAt: number;
 }
