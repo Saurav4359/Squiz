@@ -8,11 +8,14 @@ const DATABASE_URL = process.env.EXPO_PUBLIC_DATABASE_URL || 'postgresql://neond
 
 export const sql = neon(DATABASE_URL);
 
+let tablesEnsured = false;
+
 /**
  * Automatically creates tables if they don't exist.
  * This ensures the app works immediately without manual SQL setup.
  */
 async function ensureTables() {
+  if (tablesEnsured) return;
   try {
     await sql`
       CREATE TABLE IF NOT EXISTS players (
@@ -79,14 +82,22 @@ async function ensureTables() {
       );
     `;
     
-    // Add missing columns if they don't exist
+    // Add missing columns if they don't exist (Migration)
     try {
       await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS playera JSONB`;
       await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS playerb JSONB`;
       await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS wagerLamports BIGINT DEFAULT 0`;
       await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS wagertype TEXT DEFAULT 'sol'`;
+    } catch (e) {}
+
+    // Add indexes for performance
+    try {
+      await sql`CREATE INDEX IF NOT EXISTS idx_players_role_ratings ON players USING GIN (role_ratings)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_matches_playera_id ON matches ((playera->>'id'))`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_matches_playerb_id ON matches ((playerb->>'id'))`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_matches_endedat ON matches (endedat DESC)`;
     } catch (e) {
-      console.warn('[Neon] Migration: matches columns already exist or failed:', e);
+      console.warn('[Neon] Performance indexes already exist or failed:', e);
     }
     
     // Seed some legendary bot players for the leaderboard if table is empty
@@ -107,6 +118,7 @@ async function ensureTables() {
         `;
       }
     }
+    tablesEnsured = true;
   } catch (e) {
     console.error('[Neon] Table initialization failed:', e);
   }

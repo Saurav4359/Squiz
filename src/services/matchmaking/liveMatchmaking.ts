@@ -54,9 +54,9 @@ async function ensureTables() {
       )
     `;
 
-    // Clean up stale queue entries (older than 2 minutes — saves storage)
+    // Clean up stale queue entries (older than 2 minutes — based on updated_at/heartbeat)
     const twoMinAgo = Date.now() - 2 * 60 * 1000;
-    await sql`DELETE FROM matchmaking_queue WHERE created_at < ${twoMinAgo}`;
+    await sql`DELETE FROM matchmaking_queue WHERE updated_at < ${twoMinAgo}`;
     
     // Clean up finished matches older than 1 hour from live table
     const oneHourAgo = Date.now() - 60 * 60 * 1000;
