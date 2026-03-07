@@ -1,0 +1,19 @@
+[features]
+seeds = false
+skip-lint = false
+
+[programs.localnet]
+seekerrank_escrow = "DnYdx4D9ugWqL4YUYsiKk2AsaVXV9vmEqXKVWKpCm6yu"
+
+[programs.devnet]
+seekerrank_escrow = "DnYdx4D9ugWqL4YUYsiKk2AsaVXV9vmEqXKVWKpCm6yu"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "Localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "npx ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

@@ -4,7 +4,12 @@ export const HELIUS_RPC_URL = process.env.EXPO_PUBLIC_HELIUS_RPC_URL || 'https:/
 
 // Solana
 export const SKR_MINT_ADDRESS = 'SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3';
-export const ESCROW_PROGRAM_ID = '';
+export const ESCROW_PROGRAM_ID = 'DnYdx4D9ugWqL4YUYsiKk2AsaVXV9vmEqXKVWKpCm6yu';
+export const MATCH_AUTHORITY_PUBKEY = ''; // Set after generating authority keypair
+export const HOUSE_WALLET = ''; // Set to house wallet pubkey
+export const SOL_WAGER_LAMPORTS = 50_000_000; // 0.05 SOL
+export const SKR_WAGER_BASE_UNITS = 10_000_000_000; // 10 SKR (assuming 9 decimals)
+export const BACKEND_RESOLVER_URL = process.env.EXPO_PUBLIC_RESOLVER_URL || 'http://localhost:3001';
 
 // Quiz Settings
 export const QUESTIONS_PER_MATCH = 5;

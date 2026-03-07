@@ -39,3 +39,15 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Anchor / Solana program build
+target/
+programs/seekerrank-escrow/target/
+
+# backend-resolver secrets
+backend-resolver/authority-keypair.json
+backend-resolver/node_modules/
+backend-resolver/.env
+# Local Solana validator ledgers (large generated artifacts)
+test-ledger/
+programs/seekerrank-escrow/test-ledger/

@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS matches (
     winner_id TEXT,
     wager_lamports BIGINT DEFAULT 0,
     wager_type TEXT DEFAULT 'sol',
+    escrow_address TEXT,
+    escrow_status TEXT DEFAULT 'none',
     created_at BIGINT,
     ended_at BIGINT
 );

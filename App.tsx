@@ -11,6 +11,7 @@ import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import MatchHistoryScreen from './src/screens/MatchHistoryScreen';
 import DailyQuestsScreen from './src/screens/DailyQuestsScreen';
+import DepositScreen from './src/screens/DepositScreen';
 
 import { useWallet } from './src/hooks/useWallet';
 import { useAuth } from './src/hooks/useAuth';
@@ -29,11 +30,13 @@ import {
   finishLiveMatch,
 } from './src/services/matchmaking/liveMatchmaking';
 import type { MatchResult } from './src/services/matchmaking/liveMatchmaking';
+import { initializeEscrow, depositToEscrow, getEscrowStatus } from './src/services/wallet/escrow';
 
 // ─── Screen Type ─────────────────────────────────────────
 type Screen =
   | 'home'
   | 'matchmaking'
+  | 'depositing'
   | 'battle'
   | 'waiting'
   | 'results'
@@ -180,10 +183,7 @@ export default function App() {
                 authoritativeResultRef.current = result;
               },
               onOpponentAnswer: (data) => {
-                // Store opponent's latest data
                 opponentDataRef.current = data;
-
-                // Update match state with opponent's answers/score
                 setCurrentMatch((prev) => {
                   if (!prev) return prev;
                   const isPlayerA = prev.playerA.id === authHook.player!.id;
@@ -205,11 +205,22 @@ export default function App() {
               },
             });
 
-            // Show VS screen
+            // Initialize escrow (backend creates on-chain or dev simulation)
+            const playerAWallet = match.playerA.id;
+            const playerBWallet = match.playerB.id;
+            initializeEscrow(match.id, playerAWallet, playerBWallet, wager, wallet.authToken || 'dev_token')
+              .catch((e) => console.warn('[App] Escrow init failed:', e));
+
+            // Show VS screen briefly then transition to deposit
             await new Promise((r) => setTimeout(r, 2500));
             if (sessionId !== matchSessionRef.current) return;
 
-            setCurrentScreen('battle');
+            // In dev mode, skip deposit screen and go straight to battle
+            if (!wallet.authToken || wallet.authToken === 'dev_token') {
+              setCurrentScreen('battle');
+            } else {
+              setCurrentScreen('depositing');
+            }
           },
           onError: (err) => {
             console.warn('[App] Matchmaking error:', err);
@@ -574,6 +585,30 @@ export default function App() {
     setCurrentScreen('home');
   }, []);
 
+  // ─── DEPOSIT HANDLERS ──────────────────────────────────
+  const handleDeposit = useCallback(async () => {
+    if (!currentMatch || !authHook.player) return;
+    const result = await depositToEscrow(
+      currentMatch.id,
+      authHook.player.id,
+      wallet.address || '',
+      wallet.authToken || 'dev_token',
+      wagerType,
+    );
+    if (!result.success) {
+      console.warn('[App] Deposit failed');
+    }
+  }, [currentMatch, authHook.player, wallet.address, wallet.authToken, wagerType]);
+
+  const handleBothDeposited = useCallback(() => {
+    setCurrentScreen('battle');
+  }, []);
+
+  const handleDepositTimeout = useCallback(() => {
+    console.warn('[App] Deposit timeout — cancelling match');
+    handleCancel();
+  }, [handleCancel]);
+
   const handleRefreshLeaderboard = useCallback(() => {
     if (authHook.player) {
       getLeaderboard()
@@ -661,6 +696,19 @@ export default function App() {
             onMatchFound={() => {}}
             onCancel={handleCancel}
             match={currentMatch}
+          />
+        );
+      case 'depositing':
+        if (!currentMatch) return null;
+        return (
+          <DepositScreen
+            match={currentMatch}
+            currentPlayerId={player.id}
+            wagerType={wagerType}
+            onDeposited={handleDeposit}
+            onBothDeposited={handleBothDeposited}
+            onTimeout={handleDepositTimeout}
+            onCancel={handleCancel}
           />
         );
       case 'battle':

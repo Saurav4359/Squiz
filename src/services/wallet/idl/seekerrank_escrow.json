@@ -1,0 +1,138 @@
+{
+  "version": "0.1.0",
+  "name": "seekerrank_escrow",
+  "instructions": [
+    {
+      "name": "initializeEscrow",
+      "accounts": [
+        { "name": "authority", "isMut": true, "isSigner": true },
+        { "name": "escrow", "isMut": true, "isSigner": false },
+        { "name": "vault", "isMut": true, "isSigner": false },
+        { "name": "playerA", "isMut": false, "isSigner": false },
+        { "name": "playerB", "isMut": false, "isSigner": false },
+        { "name": "houseWallet", "isMut": false, "isSigner": false },
+        { "name": "tokenMint", "isMut": false, "isSigner": false },
+        { "name": "escrowTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false },
+        { "name": "associatedTokenProgram", "isMut": false, "isSigner": false },
+        { "name": "rent", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "matchIdHash", "type": { "array": ["u8", 32] } },
+        { "name": "wagerAmount", "type": "u64" },
+        { "name": "wagerType", "type": { "defined": "WagerType" } }
+      ]
+    },
+    {
+      "name": "depositSol",
+      "accounts": [
+        { "name": "player", "isMut": true, "isSigner": true },
+        { "name": "escrow", "isMut": true, "isSigner": false },
+        { "name": "vault", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "depositSpl",
+      "accounts": [
+        { "name": "player", "isMut": true, "isSigner": true },
+        { "name": "escrow", "isMut": true, "isSigner": false },
+        { "name": "playerTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "escrowTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "resolveMatch",
+      "accounts": [
+        { "name": "authority", "isMut": true, "isSigner": true },
+        { "name": "escrow", "isMut": true, "isSigner": false },
+        { "name": "vault", "isMut": true, "isSigner": false },
+        { "name": "winner", "isMut": true, "isSigner": false },
+        { "name": "houseWallet", "isMut": true, "isSigner": false },
+        { "name": "escrowTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "winnerTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "houseTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "refundMatch",
+      "accounts": [
+        { "name": "authority", "isMut": true, "isSigner": true },
+        { "name": "escrow", "isMut": true, "isSigner": false },
+        { "name": "vault", "isMut": true, "isSigner": false },
+        { "name": "playerA", "isMut": true, "isSigner": false },
+        { "name": "playerB", "isMut": true, "isSigner": false },
+        { "name": "escrowTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "playerATokenAccount", "isMut": true, "isSigner": false },
+        { "name": "playerBTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "EscrowAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "matchId", "type": { "array": ["u8", 32] } },
+          { "name": "playerA", "type": "publicKey" },
+          { "name": "playerB", "type": "publicKey" },
+          { "name": "wagerType", "type": { "defined": "WagerType" } },
+          { "name": "wagerAmount", "type": "u64" },
+          { "name": "playerADeposited", "type": "bool" },
+          { "name": "playerBDeposited", "type": "bool" },
+          { "name": "status", "type": { "defined": "EscrowStatus" } },
+          { "name": "authority", "type": "publicKey" },
+          { "name": "houseWallet", "type": "publicKey" },
+          { "name": "tokenMint", "type": "publicKey" },
+          { "name": "bump", "type": "u8" },
+          { "name": "createdAt", "type": "i64" }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "WagerType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          { "name": "Sol" },
+          { "name": "Spl" }
+        ]
+      }
+    },
+    {
+      "name": "EscrowStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          { "name": "AwaitingDeposits" },
+          { "name": "Funded" },
+          { "name": "Resolved" },
+          { "name": "Refunded" }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    { "code": 6000, "name": "InvalidStatus", "msg": "Invalid escrow status for this operation" },
+    { "code": 6001, "name": "InvalidPlayer", "msg": "Player is not part of this escrow" },
+    { "code": 6002, "name": "AlreadyDeposited", "msg": "Player has already deposited" },
+    { "code": 6003, "name": "Unauthorized", "msg": "Only the authority can perform this action" },
+    { "code": 6004, "name": "WagerTypeMismatch", "msg": "Wager type mismatch" },
+    { "code": 6005, "name": "InvalidWinner", "msg": "Winner is not a participant in this match" },
+    { "code": 6006, "name": "NotFunded", "msg": "Escrow is not fully funded" },
+    { "code": 6007, "name": "Overflow", "msg": "Arithmetic overflow" }
+  ]
+}
