@@ -1,0 +1,19 @@
+{
+  "name": "backend",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
+    "@upstash/redis": "^1.36.3",
+    "hono": "^4.12.5",
+    "redis": "^5.11.0",
+    "socket.io": "^4.8.3"
+  }
+}
