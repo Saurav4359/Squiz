@@ -9,10 +9,8 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
-import { UserRole } from '../config/constants';
 
 interface MatchmakingScreenProps {
-  role: UserRole;
   playerRating: number;
   playerUsername: string;
   wagerType: 'sol' | 'skr';
@@ -22,7 +20,6 @@ interface MatchmakingScreenProps {
 }
 
 export default function MatchmakingScreen({
-  role,
   playerRating,
   playerUsername,
   wagerType,
@@ -153,7 +150,7 @@ export default function MatchmakingScreen({
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Finding Match</Text>
         <Text style={styles.headerSub}>
-          {role} • {wagerType === 'skr' ? '💎 SKR' : '◎ SOL'} wager
+          Speed Quiz • {wagerType === 'skr' ? '💎 SKR' : '◎ SOL'} wager
         </Text>
       </View>
 
@@ -218,9 +215,18 @@ export default function MatchmakingScreen({
                   colors={colors.gradientPurple}
                   style={styles.avatarCircle}
                 >
-                  <Text style={styles.avatarText}>{match.playerB.username[0].toUpperCase()}</Text>
+                  <Text style={styles.avatarText}>
+                    {(match.playerA.username === playerUsername
+                      ? match.playerB.username
+                      : match.playerA.username
+                    )[0].toUpperCase()}
+                  </Text>
                 </LinearGradient>
-                <Text style={styles.matchPlayerName}>{match.playerB.username}</Text>
+                <Text style={styles.matchPlayerName}>
+                  {match.playerA.username === playerUsername
+                    ? match.playerB.username
+                    : match.playerA.username}
+                </Text>
                 <Text style={styles.matchPlayerLabel}>OPPONENT</Text>
               </View>
             </View>

@@ -10,7 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
 import { Match } from '../types';
-import { getMatchHistory } from '../services/db/neon';
+import { getMatchHistory } from '../services/db/database';
 
 interface MatchHistoryScreenProps {
   playerId: string;

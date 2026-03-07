@@ -1,5 +1,4 @@
 import { GROQ_API_KEY } from '../../config/constants';
-import { UserRole } from '../../config/constants';
 import { Question } from '../../types';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -9,7 +8,6 @@ const MODEL = 'llama-3.3-70b-versatile';
 
 export async function generateQuestionsFromNews(
   newsItems: string[],
-  role: UserRole,
   count: number = 5
 ): Promise<Question[]> {
   const newsText = newsItems.slice(0, 15).join('\n');
@@ -28,16 +26,8 @@ export async function generateQuestionsFromNews(
         messages: [
           {
             role: 'system',
-            content: `You are a quiz question generator for SeekerRank, a Solana/Web3 quiz battle app.
+            content: `You are a quiz question generator for SeekerRank, a Solana/Web3 speed-based quiz battle app.
             
-            CRITICAL: You MUST tailor questions to the specific ROLE requested.
-            - "Trader": Focus on prices, DEX volumes, market trends, and technical analysis.
-            - "Developer": Focus on Rust, Anchor, RPCs, Program IDs, technical architecture, and Solana core logic.
-            - "NFT Collector": Focus on collections, mints, Metaplex standards, floor prices, and royalties.
-            - "DeFi User": Focus on lending protocols, yields, TVL, liquid staking, and yield farming.
-            - "Beginner": Focus on basic ecosystem concepts, popular wallets, and common terms.
-            - "Researcher": Focus on governance, network stats (TPS), ecosystem growth, and high-level trends.
-
             Rules:
             - Questions must be 8-15 words max
             - Exactly 4 options per question
@@ -49,7 +39,7 @@ export async function generateQuestionsFromNews(
           },
           {
             role: 'user',
-            content: `Generate ${count} ORIGINAL, UNIQUE quiz questions for the "${role}" category.
+            content: `Generate ${count} ORIGINAL, UNIQUE quiz questions about the Solana ecosystem and Web3.
             
             IMPORTANT: Use ONLY the LATEST developments (last 7 days) from the news items provided below. 
             Do NOT repeat well-known facts or previous questions.
@@ -81,7 +71,7 @@ export async function generateQuestionsFromNews(
     if (!response.ok) {
       const errText = await response.text();
       console.error(`[Groq] API error ${response.status}:`, errText);
-      return generateFallbackQuestions(role, count);
+      return generateFallbackQuestions(count);
     }
 
     const data = await response.json();
@@ -89,7 +79,7 @@ export async function generateQuestionsFromNews(
 
     if (!content) {
       console.warn('[Groq] Empty response');
-      return generateFallbackQuestions(role, count);
+      return generateFallbackQuestions(count);
     }
 
     let parsed: any;
@@ -97,13 +87,13 @@ export async function generateQuestionsFromNews(
       parsed = JSON.parse(content);
     } catch {
       console.warn('[Groq] Invalid JSON, using fallback');
-      return generateFallbackQuestions(role, count);
+      return generateFallbackQuestions(count);
     }
 
     const rawQuestions: any[] = parsed.questions || (Array.isArray(parsed) ? parsed : []);
 
     if (rawQuestions.length === 0) {
-      return generateFallbackQuestions(role, count);
+      return generateFallbackQuestions(count);
     }
 
     return rawQuestions.slice(0, count).map((q: any, i: number) => {
@@ -121,7 +111,6 @@ export async function generateQuestionsFromNews(
         question: String(q.question || '').slice(0, 200),
         options: validateOptions(q.options),
         correctIndex: Math.min(Math.max(correctIdx, 0), 3),
-        role,
         difficulty: Math.min(Math.max(q.difficulty || 2, 1), 5),
         sourceDate: now,
         sourceSummary: 'AI-generated from latest Solana/Web3 news',
@@ -131,7 +120,7 @@ export async function generateQuestionsFromNews(
     });
   } catch (err) {
     console.error('[Groq] Fetch failed:', err);
-    return generateFallbackQuestions(role, count);
+    return generateFallbackQuestions(count);
   }
 }
 
@@ -243,11 +232,9 @@ export async function fetchLatestNews(): Promise<string[]> {
 
 // ─── Fallback questions (offline / API failure) ──────────
 
-export function generateFallbackQuestions(role: UserRole, count: number): Question[] {
+export function generateFallbackQuestions(count: number): Question[] {
   const now = Date.now();
-  const pool = FALLBACK_POOL.filter(
-    (q) => q.role === role || q.role === 'General'
-  );
+  const pool = FALLBACK_POOL;
 
   // Shuffle and pick
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
@@ -256,7 +243,6 @@ export function generateFallbackQuestions(role: UserRole, count: number): Questi
     question: q.question,
     options: q.options as [string, string, string, string],
     correctIndex: q.correctIndex,
-    role,
     difficulty: q.difficulty,
     sourceDate: now,
     sourceSummary: 'Curated Solana knowledge',
@@ -347,21 +333,9 @@ const FALLBACK_POOL: FallbackQ[] = [
   { question: 'What is Solana\'s block time approximately?', options: ['12 seconds', '400ms', '2 seconds', '6 seconds'], correctIndex: 1, difficulty: 2, role: 'General' },
 ];
 
-// ─── Generate for all roles ──────────────────────────────
+// ─── Generate a generic question set ─────────────────────
 
-export async function generateAllRoleQuestions(): Promise<Question[]> {
+export async function generateGenericQuestions(count: number = 5): Promise<Question[]> {
   const news = await fetchLatestNews();
-  const roles: UserRole[] = ['Trader', 'Developer', 'NFT Collector', 'DeFi User', 'Beginner'];
-  const all: Question[] = [];
-
-  for (const role of roles) {
-    try {
-      const qs = await generateQuestionsFromNews(news, role, 10);
-      all.push(...qs);
-    } catch (e) {
-      console.error(`[Groq] Failed for ${role}:`, e);
-    }
-  }
-
-  return all;
+  return generateQuestionsFromNews(news, count);
 }

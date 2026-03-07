@@ -11,33 +11,26 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
-import { ROLES, UserRole } from '../config/constants';
 import { LeaderboardEntry } from '../types';
 import { getRankTitle, getRankColor } from '../services/matchmaking/ratingSystem';
 
 interface LeaderboardScreenProps {
   entries: LeaderboardEntry[];
   currentPlayerId: string;
-  selectedRole: UserRole;
   onNavigate: (screen: string) => void;
-  onRoleChange: (role: UserRole) => void;
   onViewProfile: (playerId: string) => void;
+  onRefresh: () => void;
 }
 
 export default function LeaderboardScreen({
   entries,
   currentPlayerId,
-  selectedRole,
   onNavigate,
-  onRoleChange,
   onViewProfile,
+  onRefresh,
 }: LeaderboardScreenProps) {
   const [selectedTab, setSelectedTab] = useState<'global' | 'skr'>('global');
   const [refreshing, setRefreshing] = useState(false);
-
-  const handleRoleChange = (role: UserRole) => {
-    onRoleChange(role);
-  };
 
   const filteredEntries = useMemo(() => {
     const list = selectedTab === 'skr'
@@ -48,11 +41,11 @@ export default function LeaderboardScreen({
 
   const allEntries = filteredEntries;
 
-  const onRefresh = React.useCallback(() => {
+  const handleRefresh = React.useCallback(() => {
     setRefreshing(true);
-    onRoleChange(selectedRole);
+    onRefresh();
     setTimeout(() => setRefreshing(false), 1500);
-  }, [selectedRole, onRoleChange]);
+  }, [onRefresh]);
 
   const renderEntry = ({ item, index }: { item: LeaderboardEntry; index: number }) => {
     const isMe = item.playerId === currentPlayerId;
@@ -111,17 +104,7 @@ export default function LeaderboardScreen({
           </TouchableOpacity>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.roleScroll}>
-          {ROLES.map((role) => (
-            <TouchableOpacity
-              key={role}
-              style={[styles.roleChip, selectedRole === role && styles.roleChipActive]}
-              onPress={() => handleRoleChange(role)}
-            >
-              <Text style={[styles.roleChipText, selectedRole === role && styles.roleChipTextActive]}>{role}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {/* Single global leaderboard now, no role filter */}
       </View>
 
       {/* List */}
@@ -130,7 +113,7 @@ export default function LeaderboardScreen({
         renderItem={renderEntry}
         keyExtractor={(item) => item.playerId}
         contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>{selectedTab === 'skr' ? '💎' : '🏜️'}</Text>

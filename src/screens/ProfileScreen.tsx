@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, fontSize, fontWeight, borderRadius as radius } from '../config/theme';
-import { ROLES, UserRole } from '../config/constants';
 import { Player } from '../types';
 import {
   getRankTitle,
@@ -44,13 +43,6 @@ export default function ProfileScreen({
   
   const level = calculateLevel(player.xp);
   const xpProgress = getXPForNextLevel(player.xp);
-
-  const sortedRoles = [...ROLES]
-    .map((role) => ({
-      role,
-      rating: player.ratings[role] || 1200,
-    }))
-    .sort((a, b) => b.rating - a.rating);
 
   return (
     <View style={styles.container}>
@@ -130,20 +122,18 @@ export default function ProfileScreen({
           </View>
         </View>
 
-        {/* Rank Info */}
+        {/* Global Rank */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>ROLE RANKINGS</Text>
-          {sortedRoles.map(({ role, rating }) => (
-            <View key={role} style={styles.roleRow}>
-              <View>
-                <Text style={styles.roleName}>{role}</Text>
-                <Text style={[styles.rankTitle, { color: getRankColor(rating) }]}>
-                  {getRankTitle(rating)}
-                </Text>
-              </View>
-              <Text style={styles.ratingValue}>{Math.round(rating)}</Text>
+          <Text style={styles.cardTitle}>RANK</Text>
+          <View style={styles.roleRow}>
+            <View>
+              <Text style={styles.roleName}>Global</Text>
+              <Text style={[styles.rankTitle, { color: getRankColor(player.rating) }]}>
+                {getRankTitle(player.rating)}
+              </Text>
             </View>
-          ))}
+            <Text style={styles.ratingValue}>{Math.round(player.rating)}</Text>
+          </View>
         </View>
 
         {/* Wallet Info */}

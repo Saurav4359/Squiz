@@ -16,15 +16,14 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
-import { ROLES, UserRole } from '../config/constants';
-import { checkUsernameUnique } from '../services/db/neon';
+import { checkUsernameUnique } from '../services/db/database';
 
 const { width } = Dimensions.get('window');
 
 interface ConnectWalletScreenProps {
   onConnect: () => Promise<void>;
   onDevConnect: () => Promise<void>;
-  onCreateProfile: (username: string, role: UserRole, password?: string, twitter?: string) => Promise<void>;
+  onCreateProfile: (username: string, password?: string, twitter?: string) => Promise<void>;
   onLogin: (username: string, password: string) => Promise<void>;
   connecting: boolean;
   isNewUser: boolean;
@@ -49,7 +48,6 @@ export default function ConnectWalletScreen({
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [twitter, setTwitter] = useState('');
-  const [selectedRole, setSelectedRole] = useState<UserRole>('Trader');
   const [isLoginMode, setIsLoginMode] = useState(false);
   const [devPressCount, setDevPressCount] = useState(0);
   const [checkingUsername, setCheckingUsername] = useState(false);
@@ -149,7 +147,7 @@ export default function ConnectWalletScreen({
           setCheckingUsername(false);
           return;
         }
-        await onCreateProfile(trimmed, selectedRole, password.trim(), twitter.trim() || undefined);
+        await onCreateProfile(trimmed, password.trim(), twitter.trim() || undefined);
       }
     } catch (err: any) {
       setLocalError(err?.message || 'Authentication failed');
@@ -304,29 +302,6 @@ export default function ConnectWalletScreen({
                   />
                 </View>
 
-                {/* Role Selection */}
-                <Text style={styles.inputLabel}>PRIMARY ROLE</Text>
-                <View style={styles.roleGrid}>
-                  {ROLES.map((role) => (
-                    <TouchableOpacity
-                      key={role}
-                      style={[
-                        styles.roleOption,
-                        selectedRole === role && styles.roleOptionActive,
-                      ]}
-                      onPress={() => setSelectedRole(role)}
-                    >
-                      <Text
-                        style={[
-                          styles.roleOptionText,
-                          selectedRole === role && styles.roleOptionTextActive,
-                        ]}
-                      >
-                        {role}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
               </>
             )}
 

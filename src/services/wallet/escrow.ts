@@ -1,17 +1,11 @@
 /**
  * Wager / Escrow Service
  *
- * Production path (real device with MWA):
- *   - Transfers SOL from both players to an escrow account (protocol wallet)
- *   - Winner receives both wagers minus a 2% protocol fee
- *   - All transactions signed via MWA
+ * Handles SOL/SKR wager deposits and payouts.
+ * 2% house cut on every match.
  *
- * Development / emulator path (no MWA):
- *   - Wager is tracked in Firestore only (off-chain accounting)
- *   - Simulated balance changes for demo purposes
- *
- * Escrow account: A single protocol wallet holds funds during the match.
- * In production, this would be replaced by a Solana program (smart contract).
+ * Production: Replace with a Solana escrow program (smart contract).
+ * Dev/Hackathon: Simulated via Supabase DB tracking.
  */
 
 import {
@@ -19,20 +13,18 @@ import {
   SystemProgram,
   PublicKey,
   LAMPORTS_PER_SOL,
-  Connection,
 } from '@solana/web3.js';
-import { sql } from '../db/neon';
+import { supabase } from '../../config/supabase';
 import { getConnection, signAndSendTransaction } from '../wallet/solanaWallet';
 import { TurboModuleRegistry } from 'react-native';
+import { HOUSE_CUT_PERCENT } from '../../config/constants';
 
 // ─── Constants ────────────────────────────────────────────
-// Protocol escrow wallet — receives wagers during match
-// In production: replace with your deployed escrow program PDA
 const ESCROW_WALLET = 'EScRoW111SeekerRankProtocolV1000000000000000'; // placeholder
-const PROTOCOL_FEE_BPS = 200; // 2% fee on wager amount
+const PROTOCOL_FEE_BPS = HOUSE_CUT_PERCENT * 100; // 2% = 200 bps
 
-const SOL_WAGER = 0.05 * LAMPORTS_PER_SOL;  // 0.05 SOL
-const SKR_WAGER = 10;                         // 10 SKR tokens
+const SOL_WAGER = 0.05 * LAMPORTS_PER_SOL;
+const SKR_WAGER = 10;
 
 export type WagerType = 'sol' | 'skr';
 
@@ -41,7 +33,7 @@ export interface WagerEscrow {
   playerAId: string;
   playerBId: string;
   wagerType: WagerType;
-  wagerAmount: number; // lamports for SOL, tokens for SKR
+  wagerAmount: number;
   playerADeposited: boolean;
   playerBDeposited: boolean;
   playerATxSig?: string;
@@ -53,7 +45,6 @@ export interface WagerEscrow {
   resolvedAt?: number;
 }
 
-// ─── Check MWA ───────────────────────────────────────────
 function isMWAAvailable(): boolean {
   try {
     return TurboModuleRegistry.get('SolanaMobileWalletAdapter') != null;
@@ -82,11 +73,17 @@ export async function createEscrow(
   };
 
   try {
-    const rawSql = `INSERT INTO escrows (
-      matchId, playerAId, playerBId, wagerType, wagerAmount, status, createdAt
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`;
-    await sql(rawSql as any, [matchId, playerAId, playerBId, wagerType, escrow.wagerAmount, 'pending', escrow.createdAt]);
-  } catch(e) { /* ignore pg constraints simply logging to console locally */ }
+    await supabase.from('escrows').insert({
+      match_id: matchId,
+      player_a_id: playerAId,
+      player_b_id: playerBId,
+      wager_type: wagerType,
+      wager_amount: escrow.wagerAmount,
+      status: 'pending',
+      created_at: escrow.createdAt,
+    });
+  } catch (e) { /* ignore if table doesn't exist yet */ }
+
   return escrow;
 }
 
@@ -99,12 +96,10 @@ export async function depositWager(
   wagerType: WagerType
 ): Promise<{ success: boolean; txSig?: string; simulated?: boolean }> {
   if (!isMWAAvailable() || authToken === 'dev_token') {
-    // Dev mode: simulate deposit in Firestore
     return simulateDeposit(matchId, playerId);
   }
 
   try {
-    // Build SOL transfer transaction
     if (wagerType === 'sol') {
       const conn = getConnection();
       const tx = new Transaction().add(
@@ -116,21 +111,20 @@ export async function depositWager(
       );
 
       const txSig = await signAndSendTransaction(tx, authToken);
+      const isA = await isPlayerAInEscrow(matchId, playerId);
 
-      const isPlayerA = (await isPlayerAInEscrow(matchId, playerId));
-      
-      const updateColumn = isPlayerA ? 'playerADeposited' : 'playerBDeposited';
-      const updateTxSigColumn = isPlayerA ? 'playerATxSig' : 'playerBTxSig';
-      
-      await sql(`UPDATE escrows SET "${updateColumn}" = true, "${updateTxSigColumn}" = $1 WHERE matchId = $2` as any, [txSig, matchId]);
-
+      await supabase
+        .from('escrows')
+        .update(isA
+          ? { player_a_deposited: true, player_a_tx_sig: txSig }
+          : { player_b_deposited: true, player_b_tx_sig: txSig }
+        )
+        .eq('match_id', matchId);
 
       await checkAndFundEscrow(matchId);
       return { success: true, txSig };
     }
 
-    // SKR: SPL token transfer (simplified — production would use @solana/spl-token)
-    // For now, treat SKR as simulated
     return simulateDeposit(matchId, playerId);
   } catch (err: any) {
     console.error('[Escrow] Deposit failed:', err);
@@ -138,15 +132,17 @@ export async function depositWager(
   }
 }
 
-// ─── Simulate Deposit (dev / SKR) ────────────────────────
 async function simulateDeposit(
   matchId: string,
   playerId: string
 ): Promise<{ success: boolean; simulated: boolean }> {
   try {
     const isA = await isPlayerAInEscrow(matchId, playerId);
-    const updateColumn = isA ? 'playerADeposited' : 'playerBDeposited';
-    await sql(`UPDATE escrows SET "${updateColumn}" = true WHERE matchId = $1` as any, [matchId]);
+    await supabase
+      .from('escrows')
+      .update(isA ? { player_a_deposited: true } : { player_b_deposited: true })
+      .eq('match_id', matchId);
+
     await checkAndFundEscrow(matchId);
     return { success: true, simulated: true };
   } catch {
@@ -154,14 +150,19 @@ async function simulateDeposit(
   }
 }
 
-// ─── Check if both deposited ─────────────────────────────
 async function checkAndFundEscrow(matchId: string): Promise<void> {
-  const result = await sql`SELECT * FROM escrows WHERE matchId = ${matchId}`;
-  if (result.length === 0) return;
-  const dbData = result[0] as unknown as Record<string,any>;
-  
-  if (dbData.playeradeposited && dbData.playerbdeposited) {
-    await sql`UPDATE escrows SET status = 'funded' WHERE matchId = ${matchId}`;
+  const { data } = await supabase
+    .from('escrows')
+    .select('*')
+    .eq('match_id', matchId)
+    .single();
+
+  if (!data) return;
+  if (data.player_a_deposited && data.player_b_deposited) {
+    await supabase
+      .from('escrows')
+      .update({ status: 'funded' })
+      .eq('match_id', matchId);
   }
 }
 
@@ -173,26 +174,33 @@ export async function resolveEscrow(
   authToken: string,
   wagerType: WagerType
 ): Promise<{ success: boolean; txSig?: string; simulated?: boolean }> {
-  const result = await sql`SELECT * FROM escrows WHERE matchId = ${matchId}`;
-  if (result.length === 0) return { success: false };
+  const { data: escrow } = await supabase
+    .from('escrows')
+    .select('*')
+    .eq('match_id', matchId)
+    .single();
 
-  const escrow = result[0] as unknown as Record<string,any>;
-  if (escrow.status !== 'funded') return { success: false };
+  if (!escrow || escrow.status !== 'funded') return { success: false };
 
   if (!isMWAAvailable() || authToken === 'dev_token') {
-    // Simulate payout
-    const payoutTxSig = `simulated_${Date.now()}`;
-    await sql(`UPDATE escrows SET status = 'resolved', winnerId = $1, resolvedAt = $2, payoutTxSig = $3 WHERE matchId = $4` as any, [winnerId, Date.now(), payoutTxSig, matchId]);
+    await supabase
+      .from('escrows')
+      .update({
+        status: 'resolved',
+        winner_id: winnerId,
+        resolved_at: Date.now(),
+        payout_tx_sig: `simulated_${Date.now()}`,
+      })
+      .eq('match_id', matchId);
     return { success: true, simulated: true };
   }
 
   try {
     if (wagerType === 'sol') {
-      const totalWager = (escrow.wageramount || SOL_WAGER) * 2;
+      const totalWager = (escrow.wager_amount || SOL_WAGER) * 2;
       const fee = Math.floor(totalWager * PROTOCOL_FEE_BPS / 10000);
       const payout = totalWager - fee;
 
-      const conn = getConnection();
       const tx = new Transaction().add(
         SystemProgram.transfer({
           fromPubkey: new PublicKey(ESCROW_WALLET),
@@ -202,12 +210,22 @@ export async function resolveEscrow(
       );
 
       const txSig = await signAndSendTransaction(tx, authToken);
-      await sql(`UPDATE escrows SET status = 'resolved', winnerId = $1, resolvedAt = $2, payoutTxSig = $3 WHERE matchId = $4` as any, [winnerId, Date.now(), txSig, matchId]);
+      await supabase
+        .from('escrows')
+        .update({
+          status: 'resolved',
+          winner_id: winnerId,
+          resolved_at: Date.now(),
+          payout_tx_sig: txSig,
+        })
+        .eq('match_id', matchId);
       return { success: true, txSig };
     }
 
-    // SKR payout: simulated for now
-    await sql(`UPDATE escrows SET status = 'resolved', winnerId = $1, resolvedAt = $2 WHERE matchId = $3` as any, [winnerId, Date.now(), matchId]);
+    await supabase
+      .from('escrows')
+      .update({ status: 'resolved', winner_id: winnerId, resolved_at: Date.now() })
+      .eq('match_id', matchId);
     return { success: true, simulated: true };
   } catch (err) {
     console.error('[Escrow] Resolve failed:', err);
@@ -215,31 +233,37 @@ export async function resolveEscrow(
   }
 }
 
-// ─── Refund on cancelled match ────────────────────────────
 export async function refundEscrow(matchId: string): Promise<void> {
   try {
-    await sql(`UPDATE escrows SET status = 'refunded', resolvedAt = $1 WHERE matchId = $2` as any, [Date.now(), matchId]);
-    // In production: send refund transactions back to both players
-    console.log(`[Escrow] Refunded match ${matchId}`);
+    await supabase
+      .from('escrows')
+      .update({ status: 'refunded', resolved_at: Date.now() })
+      .eq('match_id', matchId);
   } catch (err) {
     console.error('[Escrow] Refund failed:', err);
   }
 }
 
-// ─── Get escrow status ────────────────────────────────────
 export async function getEscrow(matchId: string): Promise<WagerEscrow | null> {
-  const result = await sql`SELECT * FROM escrows WHERE matchId = ${matchId}`;
-  return result.length > 0 ? (result[0] as unknown as WagerEscrow) : null;
+  const { data } = await supabase
+    .from('escrows')
+    .select('*')
+    .eq('match_id', matchId)
+    .single();
+
+  return data as WagerEscrow | null;
 }
 
-// ─── Helper ───────────────────────────────────────────────
 async function isPlayerAInEscrow(matchId: string, playerId: string): Promise<boolean> {
-  const result = await sql`SELECT playerAId FROM escrows WHERE matchId = ${matchId}`;
-  if (result.length === 0) return false;
-  return result[0].playeraid === playerId;
+  const { data } = await supabase
+    .from('escrows')
+    .select('player_a_id')
+    .eq('match_id', matchId)
+    .single();
+
+  return data?.player_a_id === playerId;
 }
 
-// ─── Wager amounts for UI display ────────────────────────
 export function getWagerDisplay(wagerType: WagerType): string {
   return wagerType === 'sol' ? '0.05 SOL' : '10 SKR';
 }

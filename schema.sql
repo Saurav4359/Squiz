@@ -1,45 +1,75 @@
--- Create the players table
+-- Run this in your Supabase SQL Editor (Dashboard > SQL Editor)
+
+-- Players table
 CREATE TABLE IF NOT EXISTS players (
     id SERIAL PRIMARY KEY,
-    walletAddress TEXT UNIQUE NOT NULL,
-    seekerId TEXT,
-    username TEXT NOT NULL,
-    primaryRole TEXT,
+    wallet_address TEXT UNIQUE NOT NULL,
+    seeker_id TEXT,
+    username TEXT UNIQUE NOT NULL,
+    password TEXT,
+    twitter TEXT,
     rating INTEGER DEFAULT 1200,
-    matchesPlayed INTEGER DEFAULT 0,
+    matches_played INTEGER DEFAULT 0,
     wins INTEGER DEFAULT 0,
     losses INTEGER DEFAULT 0,
-    createdAt BIGINT,
-    lastActiveAt BIGINT
+    xp DECIMAL DEFAULT 0,
+    is_skr_staker BOOLEAN DEFAULT FALSE,
+    skr_balance DECIMAL DEFAULT 0,
+    current_streak INTEGER DEFAULT 0,
+    best_streak INTEGER DEFAULT 0,
+    created_at BIGINT,
+    last_active_at BIGINT
 );
 
--- Create the dailyquests table
-CREATE TABLE IF NOT EXISTS dailyquests (
+-- Daily quests table
+CREATE TABLE IF NOT EXISTS daily_quests (
     id SERIAL PRIMARY KEY,
-    walletAddress TEXT REFERENCES players(walletAddress),
+    wallet_address TEXT REFERENCES players(wallet_address),
     type TEXT,
     title TEXT,
     description TEXT,
     target INTEGER DEFAULT 10,
     progress INTEGER DEFAULT 0,
-    xpReward INTEGER DEFAULT 50,
+    xp_reward INTEGER DEFAULT 50,
     completed BOOLEAN DEFAULT FALSE,
     icon TEXT
 );
 
--- Create the matches table
+-- Matches table
 CREATE TABLE IF NOT EXISTS matches (
     id TEXT PRIMARY KEY,
-    playerA JSONB NOT NULL,
-    playerB JSONB NOT NULL,
-    winnerId TEXT,
-    role TEXT,
-    createdAt BIGINT,
-    endedAt BIGINT
+    player_a JSONB NOT NULL,
+    player_b JSONB NOT NULL,
+    winner_id TEXT,
+    wager_lamports BIGINT DEFAULT 0,
+    wager_type TEXT DEFAULT 'sol',
+    created_at BIGINT,
+    ended_at BIGINT
 );
 
--- Add indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_players_wallet ON players(walletAddress);
-CREATE INDEX IF NOT EXISTS idx_matches_playerA_id ON matches ((playerA->>'id'));
-CREATE INDEX IF NOT EXISTS idx_matches_playerB_id ON matches ((playerB->>'id'));
-CREATE INDEX IF NOT EXISTS idx_matches_endedAt ON matches(endedAt DESC);
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_players_wallet ON players(wallet_address);
+CREATE INDEX IF NOT EXISTS idx_players_rating ON players(rating DESC);
+CREATE INDEX IF NOT EXISTS idx_matches_ended ON matches(ended_at DESC);
+
+-- Seed bot players for leaderboard (optional)
+INSERT INTO players (wallet_address, username, rating, xp, created_at, last_active_at)
+VALUES
+    ('bot_SolWarrior', 'SolWarrior', 2600, 5000, extract(epoch from now()) * 1000, extract(epoch from now()) * 1000),
+    ('bot_HeliusHacker', 'HeliusHacker', 2450, 4200, extract(epoch from now()) * 1000, extract(epoch from now()) * 1000),
+    ('bot_TensorTitan', 'TensorTitan', 2380, 3800, extract(epoch from now()) * 1000, extract(epoch from now()) * 1000),
+    ('bot_JupiterJugg', 'JupiterJuggernaut', 2100, 2500, extract(epoch from now()) * 1000, extract(epoch from now()) * 1000),
+    ('bot_PhantomPilot', 'PhantomPilot', 1950, 1800, extract(epoch from now()) * 1000, extract(epoch from now()) * 1000),
+    ('bot_MeteoraMind', 'MeteoraMind', 1800, 1200, extract(epoch from now()) * 1000, extract(epoch from now()) * 1000)
+ON CONFLICT (wallet_address) DO NOTHING;
+
+-- Enable Realtime for the tables that need it
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables
+        WHERE pubname = 'supabase_realtime' AND tablename = 'matches'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE matches;
+    END IF;
+END $$;

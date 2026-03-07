@@ -15,14 +15,20 @@ import DailyQuestsScreen from './src/screens/DailyQuestsScreen';
 import { useWallet } from './src/hooks/useWallet';
 import { useAuth } from './src/hooks/useAuth';
 import { colors, fontSize, fontWeight, spacing } from './src/config/theme';
-import { DEFAULT_RATING, ROLES, UserRole, QUESTIONS_PER_MATCH } from './src/config/constants';
+import { DEFAULT_RATING, QUESTIONS_PER_MATCH, SECONDS_ANSWER_PHASE } from './src/config/constants';
 import { Player, Match, Question, DailyQuest, LeaderboardEntry } from './src/types';
 import { calculateMatchRatings, calculateDrawRatings, calculateXP } from './src/services/matchmaking/ratingSystem';
-import { generateQuestionsFromNews, fetchLatestNews, generateFallbackQuestions } from './src/services/ai/questionGenerator';
-import { filterSeenQuestions, markQuestionsAsSeen } from './src/services/ai/antiCheat';
-import { getLeaderboard, persistMatchResult, updatePlayer, getPlayerById, updatePassword } from './src/services/db/neon';
-import { createEscrow, depositWager, resolveEscrow } from './src/services/wallet/escrow';
-import { joinQueue, leaveQueue, pollForMatch, submitAnswerAndPoll, pollMatchState, finishLiveMatch } from './src/services/matchmaking/liveMatchmaking';
+import { getLeaderboard, persistMatchResult, updatePlayer, getPlayerById, updatePassword } from './src/services/db/database';
+import {
+  joinQueue,
+  leaveQueue,
+  joinMatchChannel,
+  sendAnswer,
+  sendMatchResult,
+  leaveMatchChannel,
+  finishLiveMatch,
+} from './src/services/matchmaking/liveMatchmaking';
+import type { MatchResult } from './src/services/matchmaking/liveMatchmaking';
 
 // ─── Screen Type ─────────────────────────────────────────
 type Screen =
@@ -36,8 +42,6 @@ type Screen =
   | 'quests'
   | 'history';
 
-// ─── Fallback handling moved to ai service ──────────────
-
 export default function App() {
   // ─── Hooks ─────────────────────────────────────────────
   const wallet = useWallet();
@@ -45,7 +49,6 @@ export default function App() {
 
   // ─── App State ─────────────────────────────────────────
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
-  const [selectedRole, setSelectedRole] = useState<UserRole>('Trader');
   const [wagerType, setWagerType] = useState<'sol' | 'skr'>('sol');
   const [currentMatch, setCurrentMatch] = useState<Match | null>(null);
   const localMatchRef = React.useRef<Match | null>(null);
@@ -55,12 +58,13 @@ export default function App() {
   const [viewedPlayer, setViewedPlayer] = useState<Player | null>(null);
   const [leaderboardCache, setLeaderboardCache] = useState<Record<string, LeaderboardEntry[]>>({});
   const [appReady, setAppReady] = useState(false);
-  const matchSearchSession = React.useRef(0);
-  const liveMatchId = React.useRef<string | null>(null);
-  const pollTimerRef = React.useRef<any>(null);
-  const waitingCancelledRef = React.useRef(false); // guard: prevents results from showing after cancel
+  const matchSessionRef = React.useRef(0);
+  const opponentFinishedRef = React.useRef(false);
+  const opponentDataRef = React.useRef<{ answers: any[]; score: number } | null>(null);
+  const isPlayerARef = React.useRef(false);
+  const authoritativeResultRef = React.useRef<MatchResult | null>(null);
 
-  // Keep ref in sync to access inside closures without dependency arrays
+  // Keep ref in sync
   useEffect(() => {
     localMatchRef.current = currentMatch;
   }, [currentMatch]);
@@ -68,55 +72,44 @@ export default function App() {
   // ─── Wallet → Auth bridge ─────────────────────────────
   useEffect(() => {
     if (wallet.connected && wallet.address) {
-      authHook.signIn(wallet.address).then(() => {
-        if (authHook.player?.primaryRole) {
-          setSelectedRole(authHook.player.primaryRole);
-        }
-      }).catch((err) => {
+      authHook.signIn(wallet.address).catch((err) => {
         console.error('[App] Auth sign-in failed:', err);
       });
     }
   }, [wallet.connected, wallet.address]);
 
-  // App is ready once wallet hook has finished restoring
+  // App ready
   useEffect(() => {
-    // Small delay to let restore finish
     const timer = setTimeout(() => setAppReady(true), 500);
     return () => clearTimeout(timer);
   }, []);
 
-  // Fetch leaderboard with caching and race condition prevention
+  // Fetch leaderboard
   useEffect(() => {
-    if (currentScreen === 'leaderboard' && authHook.player) {
-      let isCancelled = false;
-      const role = selectedRole;
+    if (currentScreen !== 'leaderboard' || !authHook.player) return;
 
-      // 1. Instant cache hit for snappy switching
-      if (leaderboardCache[role]) {
-        setLeaderboardEntries(leaderboardCache[role]);
-      } else {
-        setLeaderboardEntries([]); // Only clear if we don't have it cached
-      }
-      
-      getLeaderboard(role)
-        .then((entries) => {
-          if (isCancelled) return;
-          
-          const marked = entries.map((e: LeaderboardEntry) => ({
-            ...e,
-            isCurrentUser: String(e.playerId) === String(authHook.player?.id),
-          }));
+    let isCancelled = false;
 
-          setLeaderboardCache(prev => ({ ...prev, [role]: marked }));
-          setLeaderboardEntries(marked);
-        })
-        .catch((err) => {
-          if (!isCancelled) console.warn('[App] Leaderboard fetch failed:', err);
-        });
-
-      return () => { isCancelled = true; };
+    if (leaderboardCache['global']) {
+      setLeaderboardEntries(leaderboardCache['global']);
     }
-  }, [currentScreen, selectedRole]);
+
+    getLeaderboard()
+      .then((entries) => {
+        if (isCancelled) return;
+        const marked = entries.map((e: LeaderboardEntry) => ({
+          ...e,
+          isCurrentUser: String(e.playerId) === String(authHook.player?.id),
+        }));
+        setLeaderboardCache((prev) => ({ ...prev, global: marked }));
+        setLeaderboardEntries(marked);
+      })
+      .catch((err) => {
+        if (!isCancelled) console.warn('[App] Leaderboard fetch failed:', err);
+      });
+
+    return () => { isCancelled = true; };
+  }, [currentScreen, authHook.player]);
 
   // ─── Handlers ──────────────────────────────────────────
   const handleWalletConnect = useCallback(async () => {
@@ -127,11 +120,10 @@ export default function App() {
     await wallet.devConnect();
   }, [wallet]);
 
-
   const handleCreateProfile = useCallback(
-    async (username: string, role: UserRole, password?: string, twitter?: string) => {
+    async (username: string, password?: string, twitter?: string) => {
       if (!wallet.address) return;
-      await authHook.createProfile(wallet.address, username, role, password, twitter);
+      await authHook.createProfile(wallet.address, username, password, twitter);
     },
     [wallet.address, authHook]
   );
@@ -152,97 +144,97 @@ export default function App() {
     [wallet.address, authHook]
   );
 
+  // ─── MATCHMAKING (Supabase Realtime) ──────────────────
   const handleFindMatch = useCallback(
-    (role: UserRole, wager: 'sol' | 'skr') => {
+    (wager: 'sol' | 'skr') => {
       if (!authHook.player) return;
-      
-      const sessionId = ++matchSearchSession.current;
-      setSelectedRole(role);
+
+      const sessionId = ++matchSessionRef.current;
       setWagerType(wager);
       setCurrentMatch(null);
-      liveMatchId.current = null;
+      setRatingResult(null);
+      setXpEarned(0);
+      opponentFinishedRef.current = false;
+      opponentDataRef.current = null;
+      isPlayerARef.current = false;
+      authoritativeResultRef.current = null;
       setCurrentScreen('matchmaking');
 
-      const startSearch = async () => {
-        // 1. Join the matchmaking queue
-        const playerRating = authHook.player!.ratings[role] || DEFAULT_RATING;
-        await joinQueue(
-          authHook.player!.id,
-          authHook.player!.username,
-          playerRating,
-          role,
-          wager
-        );
+      const playerRating = authHook.player.rating || DEFAULT_RATING;
 
-        if (sessionId !== matchSearchSession.current) return;
+      joinQueue(
+        authHook.player.id,
+        authHook.player.username,
+        playerRating,
+        wager,
+        {
+          onMatched: async (match) => {
+            if (sessionId !== matchSessionRef.current) return;
 
-        // 2. Poll for opponent every 3 seconds (Neon-efficient)
-        const poll = async () => {
-          if (sessionId !== matchSearchSession.current) return; // Cancelled
+            setCurrentMatch(match);
+            isPlayerARef.current = match.playerA.id === authHook.player!.id;
 
-          try {
-            const result = await pollForMatch(authHook.player!.id, role, wager);
+            // Join the match realtime channel for answer sync
+            joinMatchChannel(match.id, authHook.player!.id, {
+              onMatchResult: (result) => {
+                authoritativeResultRef.current = result;
+              },
+              onOpponentAnswer: (data) => {
+                // Store opponent's latest data
+                opponentDataRef.current = data;
 
-            if (sessionId !== matchSearchSession.current) return; // Cancelled during poll
+                // Update match state with opponent's answers/score
+                setCurrentMatch((prev) => {
+                  if (!prev) return prev;
+                  const isPlayerA = prev.playerA.id === authHook.player!.id;
+                  if (isPlayerA) {
+                    return {
+                      ...prev,
+                      playerB: { ...prev.playerB, answers: data.answers, score: data.score },
+                    };
+                  } else {
+                    return {
+                      ...prev,
+                      playerA: { ...prev.playerA, answers: data.answers, score: data.score },
+                    };
+                  }
+                });
+              },
+              onOpponentFinished: () => {
+                opponentFinishedRef.current = true;
+              },
+            });
 
-            if (result.status === 'matched' && result.match) {
-              // MATCH FOUND!
-              liveMatchId.current = result.match.id;
-              setCurrentMatch(result.match);
+            // Show VS screen
+            await new Promise((r) => setTimeout(r, 2500));
+            if (sessionId !== matchSessionRef.current) return;
 
-              // Show VS screen for 2.5 seconds
-              await new Promise((r) => setTimeout(r, 2500));
-
-              if (sessionId !== matchSearchSession.current) return;
-
-              // Start battle
-              setCurrentScreen('battle');
-              return;
-            }
-
-            // Still searching — poll again in 3 seconds
-            if (sessionId === matchSearchSession.current) {
-              pollTimerRef.current = setTimeout(poll, 3000);
-            }
-          } catch (err) {
-            console.warn('[App] Poll error:', err);
-            // Retry in 5 seconds on error
-            if (sessionId === matchSearchSession.current) {
-              pollTimerRef.current = setTimeout(poll, 5000);
-            }
-          }
-        };
-
-        // Start first poll after 2 seconds (give opponent time to join)
-        pollTimerRef.current = setTimeout(poll, 2000);
-      };
-
-      startSearch();
+            setCurrentScreen('battle');
+          },
+          onError: (err) => {
+            console.warn('[App] Matchmaking error:', err);
+          },
+        }
+      );
     },
     [authHook.player]
   );
 
+  // ─── ANSWER HANDLING ──────────────────────────────────
   const handleAnswer = useCallback(
     (questionIndex: number, selectedOption: number, reactionTimeMs: number) => {
       if (!currentMatch || !authHook.player) return;
-      // Guard: don't double-record the same question (e.g. timeout fires after tap)
-      const alreadyAnswered = [
-        ...currentMatch.playerA.answers,
-        ...currentMatch.playerB.answers,
-      ].some((a: any) => a.questionIndex === questionIndex && 
-        (currentMatch.playerA.id === authHook.player!.id 
-          ? currentMatch.playerA.answers 
-          : currentMatch.playerB.answers
-        ).some((myA: any) => myA.questionIndex === questionIndex)
-      );
-      const myCurrentAnswers = currentMatch.playerA.id === authHook.player.id
+
+      const isPlayerA = currentMatch.playerA.id === authHook.player.id;
+      const myCurrentAnswers = isPlayerA
         ? currentMatch.playerA.answers
         : currentMatch.playerB.answers;
+
+      // Guard: don't double-record
       if (myCurrentAnswers.some((a: any) => a.questionIndex === questionIndex)) return;
 
       const question = currentMatch.questions[questionIndex];
       const isCorrect = selectedOption === question.correctIndex;
-      const isPlayerA = currentMatch.playerA.id === authHook.player.id;
 
       const playerAnswer = {
         questionIndex,
@@ -252,54 +244,45 @@ export default function App() {
         answeredAt: Date.now(),
       };
 
-      const myAnswers = isPlayerA ? currentMatch.playerA.answers : currentMatch.playerB.answers;
-      const myScore = isPlayerA ? currentMatch.playerA.score : currentMatch.playerB.score;
-      
-      const newAnswers = [...myAnswers, playerAnswer];
-      const newScore = myScore + (isCorrect ? 1 : 0);
+      // Calculate points
+      let points = 0;
+      if (isCorrect) {
+        const seconds = reactionTimeMs / 1000;
+        if (seconds <= 4) points = 100;
+        else if (seconds <= 8) points = 80;
+        else points = 60;
+      }
 
-      // 1. Update LOCAL state immediately (BattleScreen shows result feedback)
+      const newAnswers = [...myCurrentAnswers, playerAnswer];
+      const myScore = (isPlayerA ? currentMatch.playerA.score : currentMatch.playerB.score) + points;
+
+      // 1. Update LOCAL state immediately
       setCurrentMatch((prev) => {
         if (!prev) return prev;
         if (isPlayerA) {
           return {
             ...prev,
-            playerA: {
-              ...prev.playerA,
-              answers: newAnswers,
-              score: newScore,
-            },
+            playerA: { ...prev.playerA, answers: newAnswers, score: myScore },
           };
         } else {
           return {
             ...prev,
-            playerB: {
-              ...prev.playerB,
-              answers: newAnswers,
-              score: newScore,
-            },
+            playerB: { ...prev.playerB, answers: newAnswers, score: myScore },
           };
         }
       });
 
-      // 2. Submit ALL answers to DB in background (FIRE-AND-FORGET — no blocking!)
-      // By sending the entire array, we eliminate any chance of Postgres dropped updates
-      if (liveMatchId.current) {
-        submitAnswerAndPoll(liveMatchId.current, authHook.player.id, newAnswers, newScore)
-          .catch(e => console.warn('[App] Answer submit failed:', e));
-      }
+      // 2. Broadcast answer to opponent via realtime
+      sendAnswer(currentMatch.id, authHook.player.id, newAnswers, myScore);
 
-      // 3. After 2s result display, advance to next question OR wait for opponent
+      // 3. After 2s feedback, advance or finish
       const nextIdx = questionIndex + 1;
       const isLast = nextIdx >= currentMatch.questions.length;
 
       setTimeout(() => {
         if (isLast) {
-          // All questions done — switch to waiting screen
-          setCurrentScreen('waiting');
-          startWaitingForOpponent();
+          handleMatchFinished();
         } else {
-          // Move to next question
           setCurrentMatch((m) =>
             m ? { ...m, currentQuestionIndex: nextIdx } : m
           );
@@ -309,206 +292,309 @@ export default function App() {
     [currentMatch, authHook.player]
   );
 
-  // Poll DB until opponent has also finished all questions, then show results
-  const startWaitingForOpponent = useCallback(() => {
-    if (!authHook.player || !liveMatchId.current) return;
-    waitingCancelledRef.current = false;
+  // ─── MATCH FINISHED LOGIC ─────────────────────────────
+  const handleMatchFinished = useCallback(() => {
+    if (!authHook.player) return;
 
-    const playerId = authHook.player.id;
-    const matchId = liveMatchId.current;
-    const startTime = Date.now();
-    const TIMEOUT_MS = 90 * 1000; // 90 second absolute timeout — no one waits forever
+    const isAuthority = isPlayerARef.current;
 
-    const checkDone = async () => {
-      // Cancelled if user went home during wait
-      if (waitingCancelledRef.current) return;
-      
-      // Absolute timeout: force results even if opponent dropped
-      if (Date.now() - startTime > TIMEOUT_MS) {
-        console.warn('[App] Waiting timeout hit — forcing results with available data');
-        const finalMatch = localMatchRef.current;
-        if (finalMatch) {
-          const winnerId =
-            finalMatch.playerA.score > finalMatch.playerB.score ? finalMatch.playerA.id
-            : finalMatch.playerB.score > finalMatch.playerA.score ? finalMatch.playerB.id
-            : undefined;
-          finishLiveMatch(matchId, winnerId).catch(console.warn);
-          setCurrentMatch({ ...finalMatch, status: 'finished', winnerId, endedAt: Date.now() });
-          // Re-use last known result or fabricate draw result  
-          const isPlayerA = finalMatch.playerA.id === playerId;
-          const myR = isPlayerA ? finalMatch.playerA.rating : finalMatch.playerB.rating;
-          const oppR = isPlayerA ? finalMatch.playerB.rating : finalMatch.playerA.rating;
-          const dr = calculateDrawRatings(myR, oppR);
-          setRatingResult({ winnerNewRating: dr.newRatingA, loserNewRating: dr.newRatingA, winnerDelta: dr.deltaA, loserDelta: dr.deltaA });
-          setXpEarned(5); // Consolation XP for timeout
-          setCurrentScreen('results');
-        }
+    if (isAuthority) {
+      // PlayerA: wait for opponent to finish, then compute + broadcast
+      if (opponentFinishedRef.current) {
+        computeResultsAsAuthority();
         return;
       }
 
-      try {
-        const latestMatch = await pollMatchState(matchId);
-        if (!latestMatch) return;
+      setCurrentScreen('waiting');
 
-        const isPlayerA = latestMatch.playerA.id === playerId;
-        const opponentAnswers = isPlayerA
-          ? latestMatch.playerB.answers
-          : latestMatch.playerA.answers;
-        const myDbAnswers = isPlayerA
-          ? latestMatch.playerA.answers
-          : latestMatch.playerB.answers;
-        const totalQ = latestMatch.questions.length;
+      const timeout = setTimeout(() => {
+        console.warn('[App] Opponent timeout — playerA forcing results');
+        computeResultsAsAuthority();
+      }, 90000);
 
-        // EMERGENCY SYNC: In case of network drop, force sync our local answers to DB
-        // We do this while waiting to ensure the opponent isn't stuck waiting for us forever.
-        if (myDbAnswers.length < totalQ && localMatchRef.current) {
-          const myLocalAnswers = isPlayerA 
-            ? localMatchRef.current.playerA.answers 
-            : localMatchRef.current.playerB.answers;
-          
-          if (myLocalAnswers.length > myDbAnswers.length) {
-            // Re-submit the ENTIRE missing answers array to forcefully fix DB state
-            console.log(`[App] Emergency syncing ${myLocalAnswers.length} answers to DB`);
-            const myScore = isPlayerA ? localMatchRef.current.playerA.score : localMatchRef.current.playerB.score;
-            await submitAnswerAndPoll(matchId, playerId, myLocalAnswers, myScore);
-          }
+      const check = setInterval(() => {
+        if (opponentFinishedRef.current) {
+          clearInterval(check);
+          clearTimeout(timeout);
+          computeResultsAsAuthority();
         }
+      }, 500);
 
-        if (opponentAnswers.length >= totalQ) {
-          // BOTH DONE — calculate results
-          const winnerId =
-            latestMatch.playerA.score > latestMatch.playerB.score
-              ? latestMatch.playerA.id
-              : latestMatch.playerB.score > latestMatch.playerA.score
-              ? latestMatch.playerB.id
-              : undefined;
-
-          const isWin = winnerId === playerId;
-          const isDraw = winnerId === undefined;
-          
-          let result;
-          if (isDraw) {
-            const myRating = isPlayerA ? latestMatch.playerA.rating : latestMatch.playerB.rating;
-            const oppRating = isPlayerA ? latestMatch.playerB.rating : latestMatch.playerA.rating;
-            const drawResult = calculateDrawRatings(myRating, oppRating);
-            result = {
-              winnerNewRating: drawResult.newRatingA,
-              loserNewRating: drawResult.newRatingA,
-              winnerDelta: drawResult.deltaA,
-              loserDelta: drawResult.deltaA,
-            };
-          } else {
-            const realWinnerRating = latestMatch.playerA.score > latestMatch.playerB.score
-              ? latestMatch.playerA.rating
-              : latestMatch.playerB.rating;
-            const realLoserRating = latestMatch.playerA.score > latestMatch.playerB.score
-              ? latestMatch.playerB.rating
-              : latestMatch.playerA.rating;
-            result = calculateMatchRatings(realWinnerRating, realLoserRating);
-          }
-          setRatingResult(result);
-
-          const myAnswers = isPlayerA ? latestMatch.playerA.answers : latestMatch.playerB.answers;
-          const correctCount = myAnswers.filter((a: any) => a.isCorrect).length;
-          const avgReaction = myAnswers.length > 0
-            ? myAnswers.reduce((sum: number, a: any) => sum + a.reactionTimeMs, 0) / myAnswers.length
-            : 2000;
-
-          const xp = calculateXP(
-            isWin,
-            wagerType === 'skr',
-            correctCount,
-            totalQ,
-            avgReaction,
-            authHook.player?.isSkrStaker || false,
-            authHook.player?.currentStreak || 0
-          );
-          setXpEarned(xp);
-
-          // Update match state with final data
-          setCurrentMatch({
-            ...latestMatch,
-            status: 'finished',
-            winnerId,
-            endedAt: Date.now(),
-          });
-
-          // Finish live match in DB
-          finishLiveMatch(matchId, winnerId).catch(console.warn);
-
-          // Persist results
-          persistMatchResult({
-            match: { ...latestMatch, status: 'finished', winnerId, endedAt: Date.now() },
-            currentPlayerId: playerId,
-            role: selectedRole,
-            ratingResult: result,
-            xpEarned: xp,
-            correctAnswers: correctCount,
-            totalQuestions: totalQ,
-            isWin,
-            isDraw: winnerId === undefined,
-            wagerType,
-            winnerWalletAddress: wallet.address || undefined,
-            authToken: wallet.authToken || undefined,
-          }).then(() => authHook.refreshPlayer())
-            .catch(e => console.warn('[App] Match persist failed:', e));
-
-          // Show results
-          setCurrentScreen('results');
-        } else {
-          // Opponent still playing — poll again in 2 seconds
-          if (!waitingCancelledRef.current) {
-            pollTimerRef.current = setTimeout(checkDone, 2000);
-          }
-        }
-      } catch (err) {
-        console.warn('[App] Waiting poll error:', err);
-        if (!waitingCancelledRef.current) {
-          pollTimerRef.current = setTimeout(checkDone, 3000);
-        }
+      return () => { clearInterval(check); clearTimeout(timeout); };
+    } else {
+      // PlayerB: wait for authoritative result from playerA
+      if (authoritativeResultRef.current) {
+        applyAuthoritativeResult(authoritativeResultRef.current);
+        return;
       }
+
+      setCurrentScreen('waiting');
+
+      const timeout = setTimeout(() => {
+        console.warn('[App] PlayerA result timeout — playerB computing locally as fallback');
+        computeResultsFallback();
+      }, 90000);
+
+      const check = setInterval(() => {
+        if (authoritativeResultRef.current) {
+          clearInterval(check);
+          clearTimeout(timeout);
+          applyAuthoritativeResult(authoritativeResultRef.current);
+        }
+      }, 500);
+
+      return () => { clearInterval(check); clearTimeout(timeout); };
+    }
+  }, [authHook.player]);
+
+  // Helper: compute ratings and XP from match state
+  const computeRatingsAndXP = useCallback((match: Match, winnerId: string | undefined) => {
+    const playerId = authHook.player!.id;
+    const isPlayerA = match.playerA.id === playerId;
+    const isWin = winnerId === playerId;
+    const isDraw = winnerId === undefined;
+
+    let rResult;
+    if (isDraw) {
+      const drawResult = calculateDrawRatings(match.playerA.rating, match.playerB.rating);
+      rResult = {
+        winnerNewRating: drawResult.newRatingA,
+        loserNewRating: drawResult.newRatingB,
+        winnerDelta: drawResult.deltaA,
+        loserDelta: drawResult.deltaB,
+      };
+    } else {
+      const winnerRating = winnerId === match.playerA.id ? match.playerA.rating : match.playerB.rating;
+      const loserRating = winnerId === match.playerA.id ? match.playerB.rating : match.playerA.rating;
+      rResult = calculateMatchRatings(winnerRating, loserRating);
+    }
+
+    const myAnswers = isPlayerA ? match.playerA.answers : match.playerB.answers;
+    const correctCount = myAnswers.filter((a: any) => a.isCorrect).length;
+    const totalQ = match.questions.length;
+    const avgReaction = myAnswers.length > 0
+      ? myAnswers.reduce((sum: number, a: any) => sum + a.reactionTimeMs, 0) / myAnswers.length
+      : 2000;
+
+    const xp = calculateXP(
+      isWin,
+      wagerType === 'skr',
+      correctCount,
+      totalQ,
+      avgReaction,
+      authHook.player?.isSkrStaker || false,
+      authHook.player?.currentStreak || 0
+    );
+
+    // Also compute opponent XP (for DB persistence by authority)
+    const oppAnswers = isPlayerA ? match.playerB.answers : match.playerA.answers;
+    const oppCorrectCount = oppAnswers.filter((a: any) => a.isCorrect).length;
+    const oppXp = calculateXP(
+      !isWin && !isDraw,
+      wagerType === 'skr',
+      oppCorrectCount,
+      totalQ,
+      0,
+      false,
+      0
+    );
+
+    return { rResult, xp, oppXp, isWin, isDraw, correctCount, totalQ };
+  }, [authHook.player, wagerType]);
+
+  // PlayerA: compute results, broadcast to playerB, persist to DB
+  const computeResultsAsAuthority = useCallback(() => {
+    const match = localMatchRef.current;
+    if (!match || !authHook.player) return;
+
+    const myScore = match.playerA.score;
+    const oppScore = match.playerB.score;
+
+    const winnerId =
+      myScore > oppScore ? match.playerA.id
+      : oppScore > myScore ? match.playerB.id
+      : undefined;
+
+    const { rResult, xp, oppXp, isWin, isDraw } = computeRatingsAndXP(match, winnerId);
+
+    // Broadcast authoritative result to playerB
+    const matchResult: MatchResult = {
+      winnerId,
+      playerAScore: myScore,
+      playerBScore: oppScore,
+      ratingResult: rResult,
+    };
+    sendMatchResult(matchResult);
+
+    setRatingResult(rResult);
+    setXpEarned(xp);
+
+    const finishedMatch = {
+      ...match,
+      status: 'finished' as const,
+      winnerId,
+      endedAt: Date.now(),
+    };
+    setCurrentMatch(finishedMatch);
+
+    // Persist both players' stats (only playerA does this)
+    finishLiveMatch(match.id, winnerId);
+    persistMatchResult({
+      match: finishedMatch,
+      currentPlayerId: match.playerA.id,
+      opponentPlayerId: match.playerB.id,
+      ratingResult: rResult,
+      xpEarned: xp,
+      opponentXpEarned: oppXp,
+      isWin,
+      isDraw,
+      wagerType,
+    })
+      .then(() => authHook.refreshPlayer())
+      .catch((e) => console.warn('[App] Match persist failed:', e));
+
+    leaveMatchChannel();
+    setCurrentScreen('results');
+  }, [authHook.player, wagerType, computeRatingsAndXP]);
+
+  // PlayerB: apply authoritative result from playerA (no DB persist)
+  const applyAuthoritativeResult = useCallback((result: MatchResult) => {
+    const match = localMatchRef.current;
+    if (!match || !authHook.player) return;
+
+    const { winnerId, playerAScore, playerBScore, ratingResult: rResult } = result;
+
+    // Use authoritative scores
+    const finishedMatch = {
+      ...match,
+      playerA: { ...match.playerA, score: playerAScore },
+      playerB: { ...match.playerB, score: playerBScore },
+      status: 'finished' as const,
+      winnerId,
+      endedAt: Date.now(),
     };
 
-    // Start polling immediately
-    checkDone();
-  }, [authHook.player, selectedRole, wagerType, wallet.address, wallet.authToken]);
+    const isWin = winnerId === authHook.player.id;
+    const myAnswers = match.playerB.id === authHook.player.id ? match.playerB.answers : match.playerA.answers;
+    const correctCount = myAnswers.filter((a: any) => a.isCorrect).length;
+    const totalQ = match.questions.length;
+    const avgReaction = myAnswers.length > 0
+      ? myAnswers.reduce((sum: number, a: any) => sum + a.reactionTimeMs, 0) / myAnswers.length
+      : 2000;
+
+    const xp = calculateXP(
+      isWin,
+      wagerType === 'skr',
+      correctCount,
+      totalQ,
+      avgReaction,
+      authHook.player?.isSkrStaker || false,
+      authHook.player?.currentStreak || 0
+    );
+
+    setRatingResult(rResult);
+    setXpEarned(xp);
+    setCurrentMatch(finishedMatch);
+
+    // PlayerB does NOT persist — playerA already did
+    // Just refresh local player data after a short delay
+    setTimeout(() => authHook.refreshPlayer(), 2000);
+
+    leaveMatchChannel();
+    setCurrentScreen('results');
+  }, [authHook.player, wagerType]);
+
+  // Fallback: playerB computes locally if playerA never sends result
+  const computeResultsFallback = useCallback(() => {
+    const match = localMatchRef.current;
+    if (!match || !authHook.player) return;
+
+    const isPlayerA = match.playerA.id === authHook.player.id;
+    const myScore = isPlayerA ? match.playerA.score : match.playerB.score;
+    const oppScore = isPlayerA ? match.playerB.score : match.playerA.score;
+
+    const winnerId =
+      myScore > oppScore ? authHook.player.id
+      : oppScore > myScore ? (isPlayerA ? match.playerB.id : match.playerA.id)
+      : undefined;
+
+    const { rResult, xp, oppXp, isWin, isDraw } = computeRatingsAndXP(match, winnerId);
+
+    setRatingResult(rResult);
+    setXpEarned(xp);
+
+    const finishedMatch = {
+      ...match,
+      status: 'finished' as const,
+      winnerId,
+      endedAt: Date.now(),
+    };
+    setCurrentMatch(finishedMatch);
+
+    // Fallback: persist as before (single player)
+    finishLiveMatch(match.id, winnerId);
+    persistMatchResult({
+      match: finishedMatch,
+      currentPlayerId: authHook.player.id,
+      opponentPlayerId: isPlayerA ? match.playerB.id : match.playerA.id,
+      ratingResult: rResult,
+      xpEarned: xp,
+      opponentXpEarned: oppXp,
+      isWin,
+      isDraw,
+      wagerType,
+    })
+      .then(() => authHook.refreshPlayer())
+      .catch((e) => console.warn('[App] Match persist failed:', e));
+
+    leaveMatchChannel();
+    setCurrentScreen('results');
+  }, [authHook.player, wagerType, computeRatingsAndXP]);
 
   const handleMatchEnd = useCallback(() => setCurrentScreen('results'), []);
   const handleNavigate = useCallback((s: string) => setCurrentScreen(s as Screen), []);
+
   const handleCancel = useCallback(() => {
-    matchSearchSession.current++; // invalidate all in-flight polls
-    waitingCancelledRef.current = true; // stop waiting poller
-    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
-    // Remove from queue in DB
+    matchSessionRef.current++;
     if (authHook.player) {
-      leaveQueue(authHook.player.id).catch(console.warn);
+      leaveQueue(authHook.player.id);
     }
-    liveMatchId.current = null;
+    leaveMatchChannel();
     setCurrentMatch(null);
     setCurrentScreen('home');
   }, [authHook.player]);
 
   const handlePlayAgain = useCallback(() => {
     setCurrentMatch(null);
-    handleFindMatch(selectedRole, wagerType);
-  }, [selectedRole, wagerType, handleFindMatch]);
+    handleFindMatch(wagerType);
+  }, [wagerType, handleFindMatch]);
 
   const handleGoHome = useCallback(() => {
     setCurrentMatch(null);
     setCurrentScreen('home');
   }, []);
 
-  const handleLeaderboardRoleChange = useCallback((role: UserRole) => {
-    setSelectedRole(role);
-  }, []);
+  const handleRefreshLeaderboard = useCallback(() => {
+    if (authHook.player) {
+      getLeaderboard()
+        .then((entries) => {
+          const marked = entries.map((e: LeaderboardEntry) => ({
+            ...e,
+            isCurrentUser: String(e.playerId) === String(authHook.player?.id),
+          }));
+          setLeaderboardCache((prev) => ({ ...prev, global: marked }));
+          setLeaderboardEntries(marked);
+        })
+        .catch((err) => console.warn('[App] Leaderboard refresh failed:', err));
+    }
+  }, [authHook.player]);
 
   const handleViewProfile = useCallback(async (playerId: string) => {
     if (authHook.player && playerId === authHook.player.id) {
-      setViewedPlayer(null); // Reset to own profile
+      setViewedPlayer(null);
       setCurrentScreen('profile');
       return;
     }
-
     try {
       const p = await getPlayerById(playerId);
       if (p) {
@@ -569,8 +655,7 @@ export default function App() {
       case 'matchmaking':
         return (
           <MatchmakingScreen
-            role={selectedRole}
-            playerRating={player.ratings[selectedRole] || DEFAULT_RATING}
+            playerRating={player.rating || DEFAULT_RATING}
             playerUsername={player.username}
             wagerType={wagerType}
             onMatchFound={() => {}}
@@ -592,7 +677,7 @@ export default function App() {
         return (
           <View style={styles.waitingContainer}>
             <StatusBar style="light" backgroundColor={colors.bg} />
-            <Text style={styles.waitingEmoji}>⏳</Text>
+            <Text style={styles.waitingEmoji}>...</Text>
             <Text style={styles.waitingTitle}>Waiting for opponent...</Text>
             <Text style={styles.waitingSubtitle}>
               {currentMatch
@@ -607,9 +692,7 @@ export default function App() {
           </View>
         );
       case 'results':
-        if (!currentMatch) return null;
-        // If ratingResult not computed yet, show loading briefly
-        if (!ratingResult) {
+        if (!currentMatch || !ratingResult) {
           return (
             <View style={styles.waitingContainer}>
               <ActivityIndicator color={colors.primary} size="large" />
@@ -632,10 +715,9 @@ export default function App() {
           <LeaderboardScreen
             entries={leaderboardEntries}
             currentPlayerId={player.id}
-            selectedRole={selectedRole}
             onNavigate={handleNavigate}
-            onRoleChange={handleLeaderboardRoleChange}
             onViewProfile={handleViewProfile}
+            onRefresh={handleRefreshLeaderboard}
           />
         );
       case 'profile':
@@ -690,59 +772,39 @@ export default function App() {
 
     return (
       <View style={styles.bottomNav}>
-        <TouchableOpacity 
-          style={styles.navItem} 
-          onPress={() => {
-            setViewedPlayer(null);
-            handleNavigate('home');
-          }}
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => { setViewedPlayer(null); handleNavigate('home'); }}
         >
-          <Text style={[styles.navIcon, currentScreen === 'home' && styles.navActive]}>🏠</Text>
-          <Text style={[styles.navLabel, currentScreen === 'home' && styles.navActive]}>Home</Text>
+          <Text style={[styles.navIcon, currentScreen === 'home' && styles.navActive]}>Home</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.navItem} 
-          onPress={() => {
-            setViewedPlayer(null);
-            handleNavigate('leaderboard');
-          }}
+
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => { setViewedPlayer(null); handleNavigate('leaderboard'); }}
         >
-          <Text style={[styles.navIcon, currentScreen === 'leaderboard' && styles.navActive]}>🏆</Text>
-          <Text style={[styles.navLabel, currentScreen === 'leaderboard' && styles.navActive]}>Ranks</Text>
+          <Text style={[styles.navIcon, currentScreen === 'leaderboard' && styles.navActive]}>Ranks</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.navItem} 
-          onPress={() => {
-            setViewedPlayer(null);
-            handleNavigate('quests');
-          }}
+
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => { setViewedPlayer(null); handleNavigate('quests'); }}
         >
-          <Text style={[styles.navIcon, currentScreen === 'quests' && styles.navActive]}>📋</Text>
-          <Text style={[styles.navLabel, currentScreen === 'quests' && styles.navActive]}>Quests</Text>
+          <Text style={[styles.navIcon, currentScreen === 'quests' && styles.navActive]}>Quests</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.navItem} 
-          onPress={() => {
-            setViewedPlayer(null);
-            handleNavigate('history');
-          }}
+
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => { setViewedPlayer(null); handleNavigate('history'); }}
         >
-          <Text style={[styles.navIcon, currentScreen === 'history' && styles.navActive]}>⚔️</Text>
-          <Text style={[styles.navLabel, currentScreen === 'history' && styles.navActive]}>History</Text>
+          <Text style={[styles.navIcon, currentScreen === 'history' && styles.navActive]}>History</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.navItem} 
-          onPress={() => {
-            setViewedPlayer(null);
-            handleNavigate('profile');
-          }}
+
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => { setViewedPlayer(null); handleNavigate('profile'); }}
         >
-          <Text style={[styles.navIcon, (currentScreen === 'profile' && !viewedPlayer) && styles.navActive]}>👤</Text>
-          <Text style={[styles.navLabel, (currentScreen === 'profile' && !viewedPlayer) && styles.navActive]}>Profile</Text>
+          <Text style={[styles.navIcon, (currentScreen === 'profile' && !viewedPlayer) && styles.navActive]}>Profile</Text>
         </TouchableOpacity>
       </View>
     );
@@ -781,12 +843,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   navIcon: {
-    fontSize: 20,
+    fontSize: 12,
     marginBottom: 2,
-    color: colors.textSecondary,
-  },
-  navLabel: {
-    fontSize: 10,
     color: colors.textSecondary,
     fontWeight: fontWeight.medium,
   },

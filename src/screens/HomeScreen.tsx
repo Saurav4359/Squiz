@@ -9,20 +9,18 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
-import { ROLES, UserRole } from '../config/constants';
 import { Player, DailyQuest } from '../types';
 import { getRankTitle, getRankColor, calculateLevel, getXPForNextLevel } from '../services/matchmaking/ratingSystem';
 
 interface HomeScreenProps {
   player: Player;
-  onFindMatch: (role: UserRole, wagerType: 'sol' | 'skr') => void;
+  onFindMatch: (wagerType: 'sol' | 'skr') => void;
   onNavigate: (screen: string) => void;
   dailyQuests: DailyQuest[];
 }
 
 export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuests }: HomeScreenProps) {
-  const [selectedRole, setSelectedRole] = useState<UserRole>(player.primaryRole);
-  const rating = player.ratings[selectedRole] || 1200;
+  const rating = player.rating || 1200;
   const rankTitle = getRankTitle(rating);
   const rankColor = getRankColor(rating);
   const level = calculateLevel(player.xp);
@@ -99,43 +97,10 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
           )}
         </View>
 
-        {/* Role Selector */}
-        <Text style={styles.sectionTitle}>SELECT ROLE</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.roleScroll}
-        >
-          {ROLES.map((role) => (
-            <TouchableOpacity
-              key={role}
-              style={[
-                styles.roleChip,
-                selectedRole === role && styles.roleChipActive,
-              ]}
-              onPress={() => setSelectedRole(role)}
-            >
-              <Text
-                style={[
-                  styles.roleChipText,
-                  selectedRole === role && styles.roleChipTextActive,
-                ]}
-              >
-                {role}
-              </Text>
-              {selectedRole === role && (
-                <Text style={styles.roleRating}>
-                  {player.ratings[role] || 1200}
-                </Text>
-              )}
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
         {/* Find Match Button */}
         <TouchableOpacity
           style={styles.findMatchButton}
-          onPress={() => onFindMatch(selectedRole, 'sol')}
+          onPress={() => onFindMatch('sol')}
           activeOpacity={0.8}
         >
           <LinearGradient
@@ -153,7 +118,7 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
         {/* SKR Tournament Button */}
         <TouchableOpacity
           style={styles.skrMatchButton}
-          onPress={() => onFindMatch(selectedRole, 'skr')}
+          onPress={() => onFindMatch('skr')}
           activeOpacity={0.8}
         >
           <Text style={styles.skrMatchIcon}>💎</Text>

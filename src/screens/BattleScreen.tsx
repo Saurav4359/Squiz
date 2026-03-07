@@ -5,11 +5,10 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
-  Vibration,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
-import { SECONDS_PER_QUESTION, QUESTIONS_PER_MATCH } from '../config/constants';
+import { SECONDS_ANSWER_PHASE, SECONDS_QUESTION_PHASE, QUESTIONS_PER_MATCH } from '../config/constants';
 import { Match, Question, PlayerAnswer } from '../types';
 
 interface BattleScreenProps {
@@ -25,18 +24,34 @@ export default function BattleScreen({
   onAnswer,
   onMatchEnd,
 }: BattleScreenProps) {
-  const [timeLeft, setTimeLeft] = useState(SECONDS_PER_QUESTION);
+  const [phase, setPhase] = useState<'question' | 'answer'>('question');
+  const [timeLeft, setTimeLeft] = useState(SECONDS_ANSWER_PHASE);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [questionStartTime, setQuestionStartTime] = useState(Date.now());
+  const [lastPoints, setLastPoints] = useState<number | null>(null);
+  const [lastReactionSeconds, setLastReactionSeconds] = useState<number | null>(null);
+  const [lastWasCorrect, setLastWasCorrect] = useState<boolean | null>(null);
 
   const timerAnim = useRef(new Animated.Value(1)).current;
   const flashAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const timerIntervalRef = useRef<any>(null);
+  const phaseTimeoutRef = useRef<any>(null);
   const hasAnsweredRef = useRef(false);
 
-  const currentQuestion = match.questions[match.currentQuestionIndex];
+  // Stable refs to prevent re-renders when match prop updates (opponent answers)
+  const onAnswerRef = useRef(onAnswer);
+  onAnswerRef.current = onAnswer;
+  const questionIndexRef = useRef(match.currentQuestionIndex);
+
+  // Snapshot question data — only update when question index changes
+  const questionRef = useRef(match.questions[match.currentQuestionIndex]);
+  if (match.currentQuestionIndex !== questionIndexRef.current) {
+    questionIndexRef.current = match.currentQuestionIndex;
+    questionRef.current = match.questions[match.currentQuestionIndex];
+  }
+
   const isPlayerA = match.playerA.id === currentPlayerId;
   const myData = isPlayerA ? match.playerA : match.playerB;
   const opponentData = isPlayerA ? match.playerB : match.playerA;
@@ -49,8 +64,11 @@ export default function BattleScreen({
     timerAnim.stopAnimation();
   }, []);
 
-  const triggerFeedback = useCallback((isCorrect: boolean) => {
+  const triggerFeedback = useCallback((isCorrect: boolean, points: number, reactionSeconds: number) => {
     setShowResult(true);
+    setLastPoints(points);
+    setLastReactionSeconds(reactionSeconds);
+    setLastWasCorrect(isCorrect);
     if (isCorrect) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else {
@@ -72,71 +90,108 @@ export default function BattleScreen({
     ]).start();
   }, []);
 
+  const handleTimeout = useCallback(() => {
+    if (hasAnsweredRef.current) return;
+    hasAnsweredRef.current = true;
+
+    setSelectedAnswer(-1);
+    triggerFeedback(false, 0, SECONDS_ANSWER_PHASE);
+
+    setTimeout(() => {
+      onAnswerRef.current(questionIndexRef.current, -1, SECONDS_ANSWER_PHASE * 1000);
+    }, 0);
+  }, [triggerFeedback]);
+
   // Timer countdown and state reset per question
   useEffect(() => {
     // Reset local state
-    setTimeLeft(SECONDS_PER_QUESTION);
+    setPhase('question');
+    setTimeLeft(SECONDS_ANSWER_PHASE);
     setSelectedAnswer(null);
     setShowResult(false);
     setQuestionStartTime(Date.now());
     hasAnsweredRef.current = false;
+    setLastPoints(null);
+    setLastReactionSeconds(null);
+    setLastWasCorrect(null);
 
     // Reset animations
     timerAnim.setValue(1);
     flashAnim.setValue(0);
     scaleAnim.setValue(0.5);
 
-    // Initial animations
-    Animated.timing(timerAnim, {
-      toValue: 0,
-      duration: SECONDS_PER_QUESTION * 1000,
-      useNativeDriver: false,
-    }).start();
-
-    // Start timer interval
+    // Clear existing timers
     stopTimer();
-    timerIntervalRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          stopTimer();
-          handleTimeout();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    if (phaseTimeoutRef.current) {
+      clearTimeout(phaseTimeoutRef.current);
+      phaseTimeoutRef.current = null;
+    }
 
-    return () => stopTimer();
-  }, [match.currentQuestionIndex]);
+    // QUESTION PHASE: wait before showing options
+    phaseTimeoutRef.current = setTimeout(() => {
+      setPhase('answer');
+      setQuestionStartTime(Date.now());
 
-  const handleTimeout = useCallback(() => {
-    if (hasAnsweredRef.current) return;
-    hasAnsweredRef.current = true;
-    
-    setSelectedAnswer(-1); // Mark as timeout
-    triggerFeedback(false);
+      // ANSWER PHASE: animate timer and start countdown
+      timerAnim.setValue(1);
+      Animated.timing(timerAnim, {
+        toValue: 0,
+        duration: SECONDS_ANSWER_PHASE * 1000,
+        useNativeDriver: false,
+      }).start();
 
-    // Defer state update to next tick to avoid "update during render" error
-    setTimeout(() => {
-      onAnswer(match.currentQuestionIndex, -1, SECONDS_PER_QUESTION * 1000);
-    }, 0);
-  }, [match.currentQuestionIndex, onAnswer, triggerFeedback]);
+      setTimeLeft(SECONDS_ANSWER_PHASE);
+      timerIntervalRef.current = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            stopTimer();
+            handleTimeout();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }, SECONDS_QUESTION_PHASE * 1000);
+
+    return () => {
+      stopTimer();
+      if (phaseTimeoutRef.current) {
+        clearTimeout(phaseTimeoutRef.current);
+        phaseTimeoutRef.current = null;
+      }
+    };
+  }, [match.currentQuestionIndex, stopTimer, handleTimeout]);
 
   const handleSelectAnswer = (optionIndex: number) => {
-    if (hasAnsweredRef.current || selectedAnswer !== null) return;
+    if (phase !== 'answer' || hasAnsweredRef.current || selectedAnswer !== null) return;
     hasAnsweredRef.current = true;
 
     stopTimer();
 
     const reactionTime = Date.now() - questionStartTime;
+    const reactionSeconds = reactionTime / 1000;
     setSelectedAnswer(optionIndex);
-    
-    const isCorrect = optionIndex === currentQuestion.correctIndex;
-    triggerFeedback(isCorrect);
+
+    const question = questionRef.current;
+    if (!question) return;
+    const isCorrect = optionIndex === question.correctIndex;
+    const points =
+      isCorrect
+        ? reactionSeconds < 4
+          ? 100
+          : reactionSeconds <= 8
+          ? 80
+          : reactionSeconds <= SECONDS_ANSWER_PHASE
+          ? 60
+          : 60
+        : 0;
+    triggerFeedback(isCorrect, points, reactionSeconds);
 
     // Defer state update to next tick to avoid "update during render" error
     setTimeout(() => {
-      onAnswer(match.currentQuestionIndex, optionIndex, reactionTime);
+      onAnswerRef.current(questionIndexRef.current, optionIndex, reactionTime);
     }, 0);
   };
 
@@ -145,10 +200,10 @@ export default function BattleScreen({
       return selectedAnswer === index ? styles.optionSelected : styles.option;
     }
 
-    if (index === currentQuestion.correctIndex) {
+    if (index === questionRef.current?.correctIndex) {
       return [styles.option, styles.optionCorrect];
     }
-    if (selectedAnswer === index && index !== currentQuestion.correctIndex) {
+    if (selectedAnswer === index && index !== questionRef.current?.correctIndex) {
       return [styles.option, styles.optionWrong];
     }
     return styles.option;
@@ -160,7 +215,7 @@ export default function BattleScreen({
         ? styles.optionTextSelected
         : styles.optionText;
     }
-    if (index === currentQuestion.correctIndex) {
+    if (index === questionRef.current?.correctIndex) {
       return styles.optionTextCorrect;
     }
     if (selectedAnswer === index) {
@@ -192,7 +247,7 @@ export default function BattleScreen({
             }),
             backgroundColor:
               selectedAnswer !== null &&
-              selectedAnswer === currentQuestion?.correctIndex
+              selectedAnswer === questionRef.current?.correctIndex
                 ? colors.primary
                 : colors.danger,
           },
@@ -226,46 +281,74 @@ export default function BattleScreen({
         </View>
       </View>
 
-      {/* Timer Bar */}
-      <View style={styles.timerContainer}>
-        <Animated.View
-          style={[styles.timerBar, { width: timerWidth, backgroundColor: timerColor }]}
-        />
-        <View style={styles.timerCircle}>
-          <Text
-            style={[
-              styles.timerText,
-              timeLeft <= 3 && styles.timerTextDanger,
-            ]}
-          >
-            {timeLeft}
-          </Text>
+      {/* Timer Bar (only during answer phase) */}
+      {phase === 'answer' && (
+        <View style={styles.timerContainer}>
+          <Animated.View
+            style={[styles.timerBar, { width: timerWidth, backgroundColor: timerColor }]}
+          />
+          <View style={styles.timerCircle}>
+            <Text
+              style={[
+                styles.timerText,
+                timeLeft <= 3 && styles.timerTextDanger,
+              ]}
+            >
+              {timeLeft}
+            </Text>
+          </View>
         </View>
-      </View>
+      )}
 
       {/* Question */}
       <View style={styles.questionContainer}>
-        <Text style={styles.questionText}>{currentQuestion?.question}</Text>
+        <Text style={styles.questionText}>{questionRef.current?.question}</Text>
       </View>
 
       {/* Options */}
       <View style={styles.optionsContainer}>
-        {currentQuestion?.options.map((option, index) => (
-          <TouchableOpacity
-            key={index}
-            style={getOptionStyle(index)}
-            onPress={() => handleSelectAnswer(index)}
-            disabled={selectedAnswer !== null}
-            activeOpacity={0.7}
+        {showResult && lastPoints !== null && (
+          <Animated.View
+            style={[
+              styles.speedBadge,
+              {
+                transform: [
+                  { scale: scaleAnim },
+                  {
+                    translateY: flashAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [20, 0],
+                    }),
+                  },
+                ],
+                opacity: flashAnim,
+              },
+            ]}
           >
-            <View style={styles.optionLetter}>
-              <Text style={styles.optionLetterText}>
-                {String.fromCharCode(65 + index)}
-              </Text>
-            </View>
-            <Text style={getOptionTextStyle(index)}>{option}</Text>
-          </TouchableOpacity>
-        ))}
+            <Text style={styles.speedBadgeText}>
+              {lastWasCorrect && lastReactionSeconds !== null && lastReactionSeconds < 4
+                ? `⚡ PERFECT SPEED +${lastPoints}`
+                : `+${lastPoints} SPEED`}
+            </Text>
+          </Animated.View>
+        )}
+        {phase === 'answer' &&
+          questionRef.current?.options.map((option, index) => (
+            <TouchableOpacity
+              key={index}
+              style={getOptionStyle(index)}
+              onPress={() => handleSelectAnswer(index)}
+              disabled={selectedAnswer !== null}
+              activeOpacity={0.7}
+            >
+              <View style={styles.optionLetter}>
+                <Text style={styles.optionLetterText}>
+                  {String.fromCharCode(65 + index)}
+                </Text>
+              </View>
+              <Text style={getOptionTextStyle(index)}>{option}</Text>
+            </TouchableOpacity>
+          ))}
       </View>
 
       {/* Result Flash */}
@@ -286,26 +369,28 @@ export default function BattleScreen({
             <Text style={styles.finalMatchText}>MATCH FINISHED</Text>
           )}
           <Text style={styles.resultEmoji}>
-            {selectedAnswer === currentQuestion?.correctIndex ? '✅' : '❌'}
+            {selectedAnswer === questionRef.current?.correctIndex ? '✅' : '❌'}
           </Text>
           <Text
             style={[
               styles.resultText,
               {
                 color:
-                  selectedAnswer === currentQuestion?.correctIndex
+                  selectedAnswer === questionRef.current?.correctIndex
                     ? colors.primary
                     : colors.danger,
               },
             ]}
           >
-            {selectedAnswer === currentQuestion?.correctIndex
+            {selectedAnswer === questionRef.current?.correctIndex
               ? 'CORRECT!'
               : 'WRONG!'}
           </Text>
-          <Text style={styles.resultTime}>
-            {((Date.now() - questionStartTime) / 1000).toFixed(1)}s
-          </Text>
+          {lastReactionSeconds !== null && (
+            <Text style={styles.resultTime}>
+              {lastReactionSeconds.toFixed(1)}s
+            </Text>
+          )}
         </Animated.View>
       )}
 
@@ -423,6 +508,22 @@ const styles = StyleSheet.create({
   optionsContainer: {
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
+  },
+  speedBadge: {
+    alignSelf: 'center',
+    marginBottom: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.bgCard,
+    borderWidth: 1,
+    borderColor: colors.secondary,
+  },
+  speedBadgeText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.extrabold,
+    color: colors.secondary,
+    letterSpacing: 1,
   },
   option: {
     backgroundColor: colors.bgCard,

@@ -1,14 +1,10 @@
-import { UserRole } from '../config/constants';
-
 export interface Player {
   id: string;
   walletAddress: string;
   seekerId: string;
   username: string;
   avatarUrl?: string;
-  roles: UserRole[];
-  primaryRole: UserRole;
-  ratings: Record<UserRole, number>;
+  rating: number;
   xp: number;
   level: number;
   matchesPlayed: number;
@@ -38,7 +34,6 @@ export interface Question {
   question: string;
   options: [string, string, string, string];
   correctIndex: number; // 0-3
-  role: UserRole;
   difficulty: number; // 1-5
   sourceDate: number;
   sourceSummary: string;
@@ -125,7 +120,7 @@ export interface NewsItem {
   summary: string;
   source: string;
   sourceUrl: string;
-  category: UserRole;
+  category: string;
   publishedAt: number;
   fetchedAt: number;
 }

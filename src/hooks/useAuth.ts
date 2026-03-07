@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { createPlayer, getPlayer, updatePlayer, getDailyQuests, loginPlayer } from '../services/db/neon';
+import { createPlayer, getPlayer, updatePlayer, getDailyQuests, loginPlayer } from '../services/db/database';
 import { Player, DailyQuest } from '../types';
-import { UserRole, DEFAULT_RATING, ROLES } from '../config/constants';
 
 export interface UseAuthReturn {
   player: Player | null;
@@ -12,7 +11,6 @@ export interface UseAuthReturn {
   createProfile: (
     walletAddress: string,
     username: string,
-    primaryRole: UserRole,
     password?: string,
     twitter?: string,
     seekerId?: string
@@ -31,12 +29,12 @@ export function useAuth(): UseAuthReturn {
   const [dailyQuests, setDailyQuests] = useState<DailyQuest[]>([]);
   const [currentWallet, setCurrentWallet] = useState<string | null>(null);
 
-  // Check Firestore for player profile based strictly on wallet logic
+  // Check DB for player profile based on wallet address
   const signIn = useCallback(async (walletAddress: string) => {
     setLoading(true);
     setError(null);
     try {
-      // Check if player exists in Firestore
+      // Check if player exists
       const existingPlayer = await getPlayer(walletAddress);
 
       if (existingPlayer) {
@@ -69,12 +67,11 @@ export function useAuth(): UseAuthReturn {
     }
   }, []);
 
-  // Create a new player profile in Firestore
+  // Create a new player profile
   const createProfile = useCallback(
     async (
       walletAddress: string,
       username: string,
-      primaryRole: UserRole,
       password?: string,
       twitter?: string,
       seekerId?: string
@@ -85,7 +82,6 @@ export function useAuth(): UseAuthReturn {
           walletAddress,
           seekerId || '',
           username,
-          primaryRole,
           password,
           twitter
         );
@@ -110,7 +106,7 @@ export function useAuth(): UseAuthReturn {
     []
   );
 
-  // Refresh player data from Firestore
+  // Refresh player data
   const refreshPlayer = useCallback(async () => {
     if (!currentWallet) return;
     try {
