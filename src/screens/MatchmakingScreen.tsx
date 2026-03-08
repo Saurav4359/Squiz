@@ -7,7 +7,6 @@ import {
   Easing,
   TouchableOpacity,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
 import { DEFAULT_WAGER_SOL, SKR_WAGER_BASE_UNITS } from '../config/constants';
 
@@ -38,8 +37,10 @@ export default function MatchmakingScreen({
   const ring3 = useRef(new Animated.Value(0)).current;
   const leftCoinX = useRef(new Animated.Value(-64)).current;
   const leftCoinY = useRef(new Animated.Value(-8)).current;
+  const leftCoinRotate = useRef(new Animated.Value(0)).current;
   const rightCoinX = useRef(new Animated.Value(64)).current;
   const rightCoinY = useRef(new Animated.Value(-8)).current;
+  const rightCoinRotate = useRef(new Animated.Value(0)).current;
   const matchCoinOpacity = useRef(new Animated.Value(0)).current;
   const potScale = useRef(new Animated.Value(1)).current;
 
@@ -101,8 +102,10 @@ export default function MatchmakingScreen({
     if (!match) return;
     leftCoinX.setValue(-64);
     leftCoinY.setValue(-8);
+    leftCoinRotate.setValue(0);
     rightCoinX.setValue(64);
     rightCoinY.setValue(-8);
+    rightCoinRotate.setValue(0);
     matchCoinOpacity.setValue(0);
     potScale.setValue(1);
 
@@ -113,32 +116,44 @@ export default function MatchmakingScreen({
         easing: Easing.out(Easing.ease),
         useNativeDriver: true,
       }),
-      Animated.parallel([
-        Animated.timing(leftCoinX, {
-          toValue: 0,
-          duration: 600,
-          easing: Easing.inOut(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(leftCoinY, {
-          toValue: 28,
-          duration: 600,
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(rightCoinX, {
-          toValue: 0,
-          duration: 600,
-          easing: Easing.inOut(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(rightCoinY, {
-          toValue: 28,
-          duration: 600,
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]),
+        Animated.parallel([
+          Animated.timing(leftCoinX, {
+            toValue: 0,
+            duration: 600,
+            easing: Easing.inOut(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(leftCoinY, {
+            toValue: 28,
+            duration: 600,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(leftCoinRotate, {
+            toValue: 1,
+            duration: 600,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+          Animated.timing(rightCoinX, {
+            toValue: 0,
+            duration: 600,
+            easing: Easing.inOut(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(rightCoinY, {
+            toValue: 28,
+            duration: 600,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(rightCoinRotate, {
+            toValue: 1,
+            duration: 600,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+        ]),
       Animated.sequence([
         Animated.spring(potScale, {
           toValue: 1.12,
@@ -194,6 +209,22 @@ export default function MatchmakingScreen({
   const totalPotDisplay = wagerType === 'skr'
     ? `${(SKR_WAGER_BASE_UNITS / 1e9) * 2} SKR`
     : `${(DEFAULT_WAGER_SOL * 2).toFixed(2)} SOL`;
+  const leftCoinRotateY = leftCoinRotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+  const leftCoinRotateX = leftCoinRotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '25deg'],
+  });
+  const rightCoinRotateY = rightCoinRotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '-360deg'],
+  });
+  const rightCoinRotateX = rightCoinRotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '-25deg'],
+  });
 
   const renderRing = (anim: Animated.Value) => {
     const scale = anim.interpolate({
@@ -304,7 +335,6 @@ export default function MatchmakingScreen({
             <View style={styles.matchPotArea}>
               <Animated.View style={[styles.matchPot, { transform: [{ scale: potScale }] }]}>
                 <Text style={styles.matchPotLabel}>POT</Text>
-                <Ionicons name="logo-bitcoin" size={18} color={colors.primary} />
                 <Text style={styles.matchPotValue}>{totalPotDisplay}</Text>
               </Animated.View>
 
@@ -313,11 +343,17 @@ export default function MatchmakingScreen({
                   styles.matchCoin,
                   {
                     opacity: matchCoinOpacity,
-                    transform: [{ translateX: leftCoinX }, { translateY: leftCoinY }],
+                    transform: [
+                      { perspective: 800 },
+                      { translateX: leftCoinX },
+                      { translateY: leftCoinY },
+                      { rotateY: leftCoinRotateY },
+                      { rotateX: leftCoinRotateX },
+                    ],
                   },
                 ]}
               >
-                <Ionicons name={wagerType === 'skr' ? 'diamond-outline' : 'ios-sparkles-outline'} size={16} color={colors.primary} />
+                <Text style={styles.matchCoinIcon}>{wagerType === 'skr' ? 'SKR' : 'SOL'}</Text>
               </Animated.View>
 
               <Animated.View
@@ -325,11 +361,17 @@ export default function MatchmakingScreen({
                   styles.matchCoin,
                   {
                     opacity: matchCoinOpacity,
-                    transform: [{ translateX: rightCoinX }, { translateY: rightCoinY }],
+                    transform: [
+                      { perspective: 800 },
+                      { translateX: rightCoinX },
+                      { translateY: rightCoinY },
+                      { rotateY: rightCoinRotateY },
+                      { rotateX: rightCoinRotateX },
+                    ],
                   },
                 ]}
               >
-                <Ionicons name={wagerType === 'skr' ? 'diamond-outline' : 'ios-sparkles-outline'} size={16} color={colors.primary} />
+                <Text style={styles.matchCoinIcon}>{wagerType === 'skr' ? 'SKR' : 'SOL'}</Text>
               </Animated.View>
             </View>
           </View>
@@ -663,5 +705,12 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     paddingVertical: 4,
     paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  matchCoinIcon: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: fontWeight.bold,
   },
 });

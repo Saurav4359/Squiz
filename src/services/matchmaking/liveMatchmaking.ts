@@ -1,7 +1,7 @@
 import { supabase } from '../../config/supabase';
 import { Question, Match, MatchPlayer, PlayerAnswer } from '../../types';
 import { QUESTIONS_PER_MATCH } from '../../config/constants';
-import { generateGenericQuestions, generateFallbackQuestions } from '../ai/questionGenerator';
+import { generateGenericQuestions } from '../ai/questionGenerator';
 
 // ──────────────────────────────────────────────────────────
 // SUPABASE REALTIME MATCHMAKING
@@ -258,13 +258,17 @@ async function createLiveMatch(
   const now = Date.now();
   const matchId = `live_${now}_${Math.random().toString(36).slice(2, 6)}`;
 
-  // Generate questions from latest crypto news (fallback to static pool)
+  // Generate questions from live Solana ecosystem data (all 10 sources)
   let questions: Question[];
   try {
     questions = await generateGenericQuestions(QUESTIONS_PER_MATCH);
+    if (questions.length === 0) {
+      throw new Error('No questions generated from live sources');
+    }
   } catch (e) {
-    console.warn('[Match] AI question generation failed, using fallback:', e);
-    questions = generateFallbackQuestions(QUESTIONS_PER_MATCH);
+    console.error('[Match] Question generation failed — retrying once:', e);
+    // Single retry — if all 10 sources fail twice, something is very wrong
+    questions = await generateGenericQuestions(QUESTIONS_PER_MATCH);
   }
 
   const playerA: MatchPlayer = {

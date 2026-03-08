@@ -156,7 +156,7 @@ const cardBase = {
 } as const;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+  container: { flex: 1, backgroundColor: colors.bg, paddingTop: 20 },
   scrollView: { flex: 1, paddingHorizontal: spacing.md },
   playerCardWrap: { marginTop: spacing.xxl, marginBottom: spacing.sm, position: 'relative' },
   playerCardGlow: {
