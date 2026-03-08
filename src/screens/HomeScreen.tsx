@@ -19,9 +19,10 @@ interface HomeScreenProps {
   onFindMatch: (wagerType: 'sol' | 'skr') => void;
   onNavigate: (screen: string) => void;
   dailyQuests: DailyQuest[];
+  walletBalance: { sol: number; skr: number };
 }
 
-export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuests }: HomeScreenProps) {
+export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuests, walletBalance }: HomeScreenProps) {
   const rating = player.rating || 1200;
   const rankTitle = getRankTitle(rating);
   const level = calculateLevel(player.xp);
@@ -58,6 +59,17 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <View style={styles.balanceRow}>
+          <View style={styles.balanceCard}>
+            <Text style={styles.balanceLabel}>SOL BALANCE</Text>
+            <Text style={styles.balanceValue}>◎ {walletBalance.sol.toFixed(3)}</Text>
+          </View>
+          <View style={styles.balanceCard}>
+            <Text style={styles.balanceLabel}>SKR BALANCE</Text>
+            <Text style={[styles.balanceValue, styles.balanceAccent]}>💎 {walletBalance.skr.toFixed(2)}</Text>
+          </View>
+        </View>
+
         <View style={styles.playerCardWrap}>
           <View style={styles.playerCardGlow} />
           <View style={styles.playerCard}>
@@ -158,6 +170,37 @@ const cardBase = {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   scrollView: { flex: 1, paddingHorizontal: spacing.md },
+  balanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  balanceCard: {
+    flex: 1,
+    marginHorizontal: spacing.xs,
+    backgroundColor: colors.bgCard,
+    borderRadius: 16,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  balanceLabel: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
+  balanceValue: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  balanceAccent: {
+    color: colors.primary,
+  },
   playerCardWrap: { marginTop: spacing.xxl, marginBottom: spacing.sm, position: 'relative' },
   playerCardGlow: {
     position: 'absolute',

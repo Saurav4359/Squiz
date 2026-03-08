@@ -33,6 +33,7 @@ import {
 import type { MatchResult } from './src/services/matchmaking/liveMatchmaking';
 import { initializeEscrow, depositToEscrow, getEscrowStatus } from './src/services/wallet/escrow';
 import { joinLivePresence, leaveLivePresence } from './src/services/matchmaking/livePresence';
+import { initNewsCache } from './src/services/ai/questionGenerator';
 
 // ─── Screen Type ─────────────────────────────────────────
 type Screen =
@@ -70,6 +71,11 @@ export default function App() {
   const authoritativeResultRef = React.useRef<MatchResult | null>(null);
   const screenHistoryRef = React.useRef<Screen[]>(['home']);
   const isBackNavigationRef = React.useRef(false);
+
+  // Pre-warm news cache on app start
+  useEffect(() => {
+    initNewsCache();
+  }, []);
 
   // Keep ref in sync
   useEffect(() => {
@@ -827,6 +833,7 @@ export default function App() {
             onFindMatch={handleFindMatch}
             onNavigate={handleNavigate}
             dailyQuests={authHook.dailyQuests}
+            walletBalance={wallet.balance}
           />
         );
       case 'matchmaking':
