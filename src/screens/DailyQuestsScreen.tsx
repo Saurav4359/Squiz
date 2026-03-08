@@ -32,7 +32,7 @@ export default function DailyQuestsScreen({ quests, onNavigate }: DailyQuestsScr
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Progress Overview */}
         <View style={styles.overviewCard}>
-          <View>
+          <View style={styles.overviewContent}>
             {allDone ? (
               <>
                 <Text style={styles.allDoneEmoji}>🎉</Text>
@@ -150,38 +150,41 @@ const styles = StyleSheet.create({
   // Overview card
   overviewCard: {
     margin: spacing.lg,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
+    backgroundColor: '#12141A',
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255,255,255,0.08)',
+    marginBottom: 24,
   },
-  overviewGradient: {
-    padding: spacing.xl,
-    alignItems: 'center',
+  overviewContent: {
+    width: '100%',
   },
   overviewLabel: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
     fontWeight: fontWeight.semibold,
     letterSpacing: 1,
-    marginBottom: spacing.lg,
+    marginBottom: 8,
   },
   progressBar: {
     width: '100%',
-    height: 8,
-    backgroundColor: colors.bgElevated,
-    borderRadius: 4,
+    height: 6,
+    backgroundColor: '#2A2E35',
+    borderRadius: 6,
     overflow: 'hidden',
-    marginBottom: spacing.sm,
+    marginTop: 8,
+    marginBottom: 8,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 4,
+    backgroundColor: '#9FE870',
+    borderRadius: 6,
   },
   overviewStats: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
+    marginTop: 8,
   },
   allDoneEmoji: { fontSize: 48, marginBottom: spacing.md },
   allDoneTitle: {
@@ -199,7 +202,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
-    marginTop: spacing.sm,
+    marginTop: 0,
   },
 
   // Quest cards
