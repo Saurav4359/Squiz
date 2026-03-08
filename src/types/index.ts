@@ -106,6 +106,7 @@ export interface LeaderboardEntry {
   rank: number;
   playerId: string;
   username: string;
+  twitter?: string | null;
   rating: number;
   winRate: number;
   matchesPlayed: number;

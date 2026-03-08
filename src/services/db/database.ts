@@ -185,7 +185,7 @@ export async function getDailyQuests(walletAddress: string): Promise<DailyQuest[
 export async function getLeaderboard(): Promise<any[]> {
   const { data, error } = await supabase
     .from('players')
-    .select('id, username, rating, wins, matches_played, is_skr_staker')
+    .select('id, username, twitter, rating, wins, matches_played, is_skr_staker')
     .order('rating', { ascending: false })
     .limit(20);
 
@@ -195,6 +195,7 @@ export async function getLeaderboard(): Promise<any[]> {
     rank: index + 1,
     playerId: String(p.id),
     username: p.username,
+    twitter: p.twitter || null,
     rating: p.rating || 1200,
     winRate: p.matches_played > 0 ? Math.round((Number(p.wins) / Number(p.matches_played)) * 100) : 0,
     matchesPlayed: p.matches_played || 0,

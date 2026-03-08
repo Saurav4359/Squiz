@@ -137,21 +137,10 @@ export function getXPForNextLevel(currentXP: number): { current: number; require
  * Get rank title based on rating
  */
 export function getRankTitle(rating: number): string {
-  if (rating >= 2400) return 'Legendary';
-  if (rating >= 2100) return 'Grandmaster';
-  if (rating >= 1900) return 'Master';
-  if (rating >= 1600) return 'Expert';
-  if (rating >= 1400) return 'Specialist';
-  if (rating >= 1200) return 'Apprentice';
-  return 'Newcomer';
-}
-
-export function getRankColor(rating: number): string {
-  if (rating >= 2400) return '#FFD700'; // Gold
-  if (rating >= 2100) return '#FF4757'; // Red
-  if (rating >= 1900) return '#A855F7'; // Purple
-  if (rating >= 1600) return '#00D9FF'; // Cyan
-  if (rating >= 1400) return '#00F5A0'; // Green
-  if (rating >= 1200) return '#8B8B9E'; // Gray
-  return '#5A5A6E'; // Dim
+  if (rating >= 2000) return 'Sol Titan';
+  if (rating >= 1700) return 'Solana Samurai';
+  if (rating >= 1400) return 'Alpha Ape';
+  if (rating >= 1100) return 'Diamond Seeker';
+  if (rating >= 800) return 'Chain Challenger';
+  return 'Rookie Seeker';
 }

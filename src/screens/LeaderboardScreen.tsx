@@ -3,15 +3,16 @@ import {
   View,
   Text,
   StyleSheet,
+  Pressable,
   TouchableOpacity,
-  ScrollView,
   FlatList,
-  ActivityIndicator,
   RefreshControl,
+  Linking,
 } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
 import { LeaderboardEntry } from '../types';
-import { getRankTitle, getRankColor } from '../services/matchmaking/ratingSystem';
+import { getRankTitle } from '../services/matchmaking/ratingSystem';
 
 interface LeaderboardScreenProps {
   entries: LeaderboardEntry[];
@@ -28,6 +29,15 @@ export default function LeaderboardScreen({
   onViewProfile,
   onRefresh,
 }: LeaderboardScreenProps) {
+  const XLogo = () => (
+    <Svg viewBox="0 0 16 16" width={12} height={12}>
+      <Path
+        d="M12.6 0.75h2.454l-5.36 6.142L16 15.25h-4.937l-3.867 -5.07 -4.425 5.07H0.316l5.733 -6.57L0 0.75h5.063l3.495 4.633L12.601 0.75Zm-0.86 13.028h1.36L4.323 2.145H2.865z"
+        fill="#FFFFFF"
+      />
+    </Svg>
+  );
+
   const [selectedTab, setSelectedTab] = useState<'global' | 'skr'>('global');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -46,34 +56,65 @@ export default function LeaderboardScreen({
     setTimeout(() => setRefreshing(false), 1500);
   }, [onRefresh]);
 
+  const openTwitter = React.useCallback(async (handle: string) => {
+    const clean = handle.replace(/^@/, '');
+    const url = `https://x.com/${clean}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      // ignore silently for now to keep UI flow simple
+    }
+  }, []);
+
   const renderEntry = ({ item, index }: { item: LeaderboardEntry; index: number }) => {
     const isMe = item.playerId === currentPlayerId;
-    const rankColor = getRankColor(item.rating);
     const displayRank = index + 1;
+    const rankTitle = getRankTitle(item.rating);
+    const twitterHandle = item.twitter ? `@${String(item.twitter).replace(/^@/, '')}` : null;
+    const metaText =
+      item.winRate > 0
+        ? `${item.winRate}% WR`
+        : item.matchesPlayed > 0
+        ? `${item.matchesPlayed} matches`
+        : '';
 
     return (
-      <TouchableOpacity 
-        style={[styles.entryRow, isMe && styles.entryRowMe]}
+      <Pressable
+        style={({ pressed }) => [
+          styles.entryRow,
+          isMe && styles.entryRowMe,
+          pressed && styles.entryRowPressed,
+        ]}
         onPress={() => onViewProfile(item.playerId)}
-        activeOpacity={0.7}
       >
         <View style={styles.rankCol}>
-          <Text style={styles.rankText}>{displayRank}</Text>
+          <Text style={styles.rankText}>#{displayRank}</Text>
         </View>
 
         <View style={styles.playerCol}>
           <View style={styles.playerNameRow}>
             <Text style={[styles.playerName, isMe && styles.playerNameMe]}>{item.username}</Text>
-            {item.isSkrStaker && <Text style={styles.skrBadge}>💎</Text>}
           </View>
-          <Text style={[styles.playerRank, { color: rankColor }]}>{getRankTitle(item.rating)}</Text>
+          {twitterHandle ? (
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation?.();
+                openTwitter(twitterHandle);
+              }}
+              style={styles.twitterRow}
+            >
+              <XLogo />
+              <Text style={styles.twitterHandle}>{twitterHandle}</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         <View style={styles.ratingCol}>
-          <Text style={[styles.ratingValue, { color: rankColor }]}>{item.rating}</Text>
-          <Text style={styles.ratingLabel}>{item.winRate}% WR</Text>
+          <Text style={styles.rankTitleText}>{rankTitle}</Text>
+          <Text style={styles.ratingValue}>{item.rating}</Text>
+          {metaText ? <Text style={styles.ratingLabel}>{metaText}</Text> : null}
         </View>
-      </TouchableOpacity>
+      </Pressable>
     );
   };
 
@@ -82,7 +123,7 @@ export default function LeaderboardScreen({
       <View>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Seeker Ranks</Text>
-          <Text style={styles.headerSub}>Compete for the ultimate title</Text>
+          <Text style={styles.headerSub}>Arena Champions</Text>
         </View>
       </View>
 
@@ -128,15 +169,14 @@ export default function LeaderboardScreen({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  headerGradient: { paddingTop: 60, paddingBottom: 20, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
-  header: { alignItems: 'center', marginBottom: 24 },
-  headerTitle: { fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: 1 },
+  header: { alignItems: 'center', marginBottom: 18, paddingTop: 52 },
+  headerTitle: { fontSize: 24, fontWeight: '700', color: '#fff', letterSpacing: 0.6 },
   headerSub: { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
   
   // Podium removed
 
   // Control Panel
-  controlPanel: { marginTop: -20, paddingHorizontal: 20 },
+  controlPanel: { paddingHorizontal: 16 },
   tabRow: { flexDirection: 'row', backgroundColor: colors.bgElevated, borderRadius: 16, padding: 4, marginBottom: 16 },
   tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12 },
   tabActive: { backgroundColor: colors.bgCard },
@@ -149,20 +189,57 @@ const styles = StyleSheet.create({
   roleChipTextActive: { color: colors.primary, fontWeight: 'bold' },
 
   // List
-  list: { padding: 20, paddingBottom: 100 },
-  entryRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bgCard, padding: 16, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: colors.border },
-  entryRowMe: { borderColor: colors.primary, backgroundColor: colors.primaryDim },
-  rankCol: { width: 30 },
-  rankText: { color: colors.textSecondary, fontWeight: 'bold' },
+  list: { paddingHorizontal: 16, paddingBottom: 100 },
+  entryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bgCard,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    height: 78,
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#A1A1AA',
+  },
+  entryRowPressed: {
+    transform: [{ scale: 1.02 }],
+  },
+  entryRowMe: {
+    borderColor: '#9FE870',
+    borderWidth: 1.5,
+    backgroundColor: '#14181A',
+    shadowColor: '#9FE870',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
+  rankCol: { width: 44, alignItems: 'flex-start' },
+  rankText: { color: colors.textSecondary, fontWeight: '700', fontSize: 14 },
   playerCol: { flex: 1, marginLeft: 12 },
-  playerNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  playerName: { color: colors.text, fontWeight: '700', fontSize: 15 },
+  playerNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
+  playerName: { color: colors.text, fontWeight: '700', fontSize: 16 },
   playerNameMe: { color: colors.primary },
-  playerRank: { fontSize: 11, marginTop: 2 },
-  skrBadge: { fontSize: 10 },
-  ratingCol: { alignItems: 'flex-end' },
-  ratingValue: { fontSize: 18, fontWeight: '900' },
-  ratingLabel: { fontSize: 10, color: colors.textDim, marginTop: 2 },
+  twitterHandle: {
+    fontSize: 12,
+    color: colors.accent,
+    textDecorationLine: 'underline',
+  },
+  twitterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  rankTitleText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.accent,
+    marginBottom: 2,
+  },
+  ratingCol: { alignItems: 'flex-end', minWidth: 118 },
+  ratingValue: { fontSize: 16, fontWeight: '700', color: colors.primary },
+  ratingLabel: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
 
   emptyState: { alignItems: 'center', marginTop: 40 },
   emptyEmoji: { fontSize: 60, marginBottom: 16 },

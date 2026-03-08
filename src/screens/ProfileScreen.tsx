@@ -15,7 +15,6 @@ import { colors, spacing, borderRadius as radius } from '../config/theme';
 import { Player } from '../types';
 import {
   getRankTitle,
-  getRankColor,
   calculateLevel,
   getXPForNextLevel,
 } from '../services/matchmaking/ratingSystem';
@@ -74,7 +73,7 @@ export default function ProfileScreen({
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Rank</Text>
           <View style={styles.rowBetween}>
-            <Text style={[styles.bodyText, { color: getRankColor(player.rating) }]}>{getRankTitle(player.rating)}</Text>
+            <Text style={styles.bodyText}>{getRankTitle(player.rating)}</Text>
             <Text style={styles.valueText}>{Math.round(player.rating)}</Text>
           </View>
         </View>
