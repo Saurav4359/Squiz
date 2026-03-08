@@ -75,7 +75,7 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
             </View>
 
             <View style={styles.xpBarBackground}>
-              <View style={[styles.xpBarProgress, { width: `${xpProgress.progress * 100}%` }]} />
+              <View style={[styles.xpBarProgress, { width: `${Math.min(100, xpProgress.progress * 100)}%` }]} />
               <View
                 style={[
                   styles.xpFlameWrap,
@@ -126,7 +126,7 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
                 style={[
                   styles.questProgressFill,
                   {
-                    width: `${(quest.progress / quest.target) * 100}%`,
+                    width: `${Math.min((quest.progress / quest.target) * 100, 100)}%`,
                     backgroundColor: quest.isCompleted ? colors.success : colors.primary,
                   },
                 ]}

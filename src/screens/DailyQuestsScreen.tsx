@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
 import { DailyQuest } from '../types';
 
@@ -35,7 +36,7 @@ export default function DailyQuestsScreen({ quests, onNavigate }: DailyQuestsScr
           <View style={styles.overviewContent}>
             {allDone ? (
               <>
-                <Text style={styles.allDoneEmoji}>🎉</Text>
+                <Ionicons name="trophy-outline" size={48} color={colors.primary} style={{ marginBottom: spacing.md }} />
                 <Text style={styles.allDoneTitle}>All Quests Complete!</Text>
                 <Text style={styles.allDoneSub}>Come back tomorrow for new quests</Text>
               </>
@@ -69,7 +70,7 @@ export default function DailyQuestsScreen({ quests, onNavigate }: DailyQuestsScr
             ]}
           >
             <View style={styles.questLeft}>
-              <Text style={styles.questIcon}>{quest.icon}</Text>
+              <Ionicons name={quest.icon as any} size={28} color={quest.isCompleted ? colors.primary : colors.text} />
             </View>
             <View style={styles.questMiddle}>
               <Text style={[styles.questTitle, quest.isCompleted && styles.questTitleDone]}>
@@ -94,7 +95,12 @@ export default function DailyQuestsScreen({ quests, onNavigate }: DailyQuestsScr
             </View>
             <View style={styles.questRight}>
               {quest.isCompleted ? (
-                <Text style={styles.checkmark}>✅</Text>
+                <Ionicons name="checkmark-circle" size={26} color={colors.primary} />
+              ) : quest.tokenReward ? (
+                <View style={[styles.xpBadge, { borderColor: colors.warning, backgroundColor: 'rgba(255, 171, 0, 0.1)' }]}>
+                  <Text style={[styles.xpBadgeText, { color: colors.warning }]}>+{quest.tokenReward}</Text>
+                  <Text style={[styles.xpBadgeLabel, { color: colors.warning }]}>{quest.tokenSymbol || 'TOK'}</Text>
+                </View>
               ) : (
                 <View style={styles.xpBadge}>
                   <Text style={styles.xpBadgeText}>+{quest.xpReward}</Text>
@@ -190,10 +196,10 @@ const styles = StyleSheet.create({
   allDoneTitle: {
     fontSize: fontSize.xl,
     fontWeight: fontWeight.extrabold,
-    color: colors.bg,
+    color: colors.text,
     marginBottom: spacing.xs,
   },
-  allDoneSub: { fontSize: fontSize.sm, color: 'rgba(10,10,26,0.7)' },
+  allDoneSub: { fontSize: fontSize.sm, color: colors.textSecondary },
 
   sectionTitle: {
     fontSize: fontSize.xs,

@@ -322,4 +322,17 @@ export async function finishLiveMatch(
   winnerId: string | undefined
 ): Promise<void> {
   console.log(`[Match] ${matchId} finished. Winner: ${winnerId || 'DRAW'}`);
+  
+  const { error } = await supabase
+    .from('matches')
+    .update({
+      winner_id: winnerId,
+      ended_at: Date.now(),
+      status: 'finished'
+    })
+    .eq('id', matchId);
+
+  if (error) {
+    console.error('[Match] Failed to finish match in DB:', error.message);
+  }
 }

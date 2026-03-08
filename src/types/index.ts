@@ -98,6 +98,8 @@ export interface DailyQuest {
   target: number;
   progress: number;
   xpReward: number;
+  tokenReward?: number;
+  tokenSymbol?: string;
   isCompleted: boolean;
   icon: string;
 }

@@ -166,19 +166,58 @@ export async function getDailyQuests(walletAddress: string): Promise<DailyQuest[
     .select('*')
     .eq('wallet_address', walletAddress);
 
-  if (error || !data) return [];
+  const playerInfo = await getPlayer(walletAddress);
+  // Default to zero if no player found. This pulls live XP every time!
+  const xp = playerInfo?.xp || 0;
+  const matches = playerInfo?.matchesPlayed || 0;
 
-  return data.map((q: any) => ({
+  // The previous target of 250 was too low (users already had more XP than that)
+  // causing the bar to show 100% full and look like it wasn't updating.
+  // Using higher targets so the bar is < 50% full and updates on every win.
+  const globalQuests: DailyQuest[] = [
+    {
+      id: 'global_skr_1',
+      title: 'Road to Airdrop',
+      description: 'Earn 10,000 XP before 25th March',
+      type: 'accuracy',
+      target: 10000,
+      progress: Math.min(xp, 10000),
+      xpReward: 0,
+      tokenReward: 10,
+      tokenSymbol: 'SKR',
+      isCompleted: xp >= 10000,
+      icon: 'airplane-outline',
+    },
+    {
+      id: 'global_skr_2',
+      title: 'Arena Grinder',
+      description: 'Play 20 SKR matches today',
+      type: 'play_matches',
+      target: 20,
+      progress: Math.min(matches, 20),
+      xpReward: 0,
+      tokenReward: 8,
+      tokenSymbol: 'SKR',
+      isCompleted: matches >= 20,
+      icon: 'game-controller-outline',
+    }
+  ];
+
+  const dbQuests = (!error && data) ? data.map((q: any) => ({
     id: String(q.id),
     type: q.type || 'play_matches',
     title: q.title,
     description: q.description,
     target: q.target || 10,
     progress: q.progress || 0,
-    xpReward: q.xp_reward || 50,
+    xpReward: q.xp_reward || 0,
+    tokenReward: q.token_reward || undefined,
+    tokenSymbol: q.token_symbol || undefined,
     isCompleted: q.completed || false,
-    icon: q.icon || 'star',
-  }));
+    icon: q.icon || 'star-outline',
+  })) : [];
+
+  return [...globalQuests, ...dbQuests];
 }
 
 // ─── Leaderboard ────────────────────────────────────────────────
@@ -262,27 +301,61 @@ export async function persistMatchResult(data: any): Promise<void> {
       .eq('id', Number(opponentPlayerId));
   }
 
-  // 3. Record the match
-  try {
-    await supabase
-      .from('matches')
-      .upsert({
-        id: match.id,
-        player_a: match.playerA,
-        player_b: match.playerB,
-        winner_id: match.winnerId || null,
-        wager_lamports: match.wagerLamports || 0,
-        wager_amount: match.wagerAmount || 0,
-        wager_type: wagerType || 'sol',
-        player_a_deposit_tx: match.playerADepositTx || null,
-        player_b_deposit_tx: match.playerBDepositTx || null,
-        payout_tx: match.payoutTx || null,
-        payout_lamports: match.payoutLamports || null,
-        created_at: match.createdAt,
-        ended_at: now,
-      });
-  } catch (e) {
-    console.warn('[DB] Match record insertion failed:', e);
+  // 3. Update Quests Progress for Player A
+  if (player) {
+    // Increment match count quests
+    await supabase.rpc('increment_quest_progress', {
+      p_wallet_address: player.wallet_address,
+      p_type: 'play_matches',
+      p_amount: 1
+    });
+    // Increment XP quests
+    await supabase.rpc('increment_quest_progress', {
+      p_wallet_address: player.wallet_address,
+      p_type: 'accuracy',
+      p_amount: xpEarned
+    });
+  }
+
+  // 4. Update Quests Progress for Player B
+  if (opponent) {
+    // Increment match count quests
+    await supabase.rpc('increment_quest_progress', {
+      p_wallet_address: opponent.wallet_address,
+      p_type: 'play_matches',
+      p_amount: 1
+    });
+    // Increment XP quests
+    await supabase.rpc('increment_quest_progress', {
+      p_wallet_address: opponent.wallet_address,
+      p_type: 'accuracy',
+      p_amount: opponentXpEarned
+    });
+  }
+
+  // 5. Record the match (skip if draw)
+  if (!isDraw) {
+    try {
+      await supabase
+        .from('matches')
+        .upsert({
+          id: match.id,
+          player_a: match.playerA,
+          player_b: match.playerB,
+          winner_id: match.winnerId || null,
+          wager_lamports: match.wagerLamports || 0,
+          wager_amount: match.wagerAmount || 0,
+          wager_type: wagerType || 'sol',
+          player_a_deposit_tx: match.playerADepositTx || null,
+          player_b_deposit_tx: match.playerBDepositTx || null,
+          payout_tx: match.payoutTx || null,
+          payout_lamports: match.payoutLamports || null,
+          created_at: match.createdAt,
+          ended_at: now,
+        });
+    } catch (e) {
+      console.warn('[DB] Match record insertion failed:', e);
+    }
   }
 }
 
@@ -354,9 +427,10 @@ export async function getMatchHistory(playerId: string): Promise<any[]> {
 
     if (error || !data) return [];
 
-    // Filter to matches involving this player
+    // Filter to matches involving this player (exclude draws/abandoned where winner_id is null)
     const pid = String(playerId);
     const filtered = data.filter((m: any) => {
+      if (!m.winner_id) return false; // Ignore draws and unfinished matches
       const aId = typeof m.player_a === 'string' ? JSON.parse(m.player_a)?.id : m.player_a?.id;
       const bId = typeof m.player_b === 'string' ? JSON.parse(m.player_b)?.id : m.player_b?.id;
       return String(aId) === pid || String(bId) === pid;
