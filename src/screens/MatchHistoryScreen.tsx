@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
+import { DEFAULT_WAGER_SOL, HOUSE_CUT_PERCENT, SKR_WAGER_BASE_UNITS, SOL_WAGER_LAMPORTS } from '../config/constants';
 import { Match } from '../types';
 import { getMatchHistory } from '../services/db/database';
 
@@ -19,6 +20,8 @@ interface MatchHistoryScreenProps {
 export default function MatchHistoryScreen({ playerId, onNavigate }: MatchHistoryScreenProps) {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
+  const BASE_UNITS_PER_TOKEN = 1_000_000_000;
+  const BASE_UNIT_THRESHOLD = Math.min(SOL_WAGER_LAMPORTS, SKR_WAGER_BASE_UNITS) / 10;
 
   useEffect(() => {
     fetchHistory();
@@ -60,6 +63,30 @@ export default function MatchHistoryScreen({ playerId, onNavigate }: MatchHistor
 
   const getPlayerData = (match: Match) => {
     return match.playerA.id === playerId ? match.playerA : match.playerB;
+  };
+
+  const getDisplayWagerAmount = (match: Match, wagerType: 'sol' | 'skr') => {
+    const rawAmount = Number(match.wagerAmount || 0);
+    const rawLamports = Number(match.wagerLamports || 0);
+
+    // Supports both token amounts and base-unit amounts from persisted records.
+    if (rawAmount > 0) {
+      return rawAmount >= BASE_UNIT_THRESHOLD ? rawAmount / BASE_UNITS_PER_TOKEN : rawAmount;
+    }
+
+    if (rawLamports > 0) {
+      return rawLamports / BASE_UNITS_PER_TOKEN;
+    }
+
+    return wagerType === 'sol'
+      ? DEFAULT_WAGER_SOL
+      : SKR_WAGER_BASE_UNITS / BASE_UNITS_PER_TOKEN;
+  };
+
+  const formatAmount = (amount: number) => {
+    if (Number.isInteger(amount)) return `${amount}`;
+    if (amount >= 1) return amount.toFixed(2).replace(/\.00$/, '');
+    return amount.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
   };
 
   const formatDate = (ts?: number) => {
@@ -111,26 +138,18 @@ export default function MatchHistoryScreen({ playerId, onNavigate }: MatchHistor
               const avgReaction = playerData.answers.length > 0
                 ? (playerData.answers.reduce((s, a) => s + a.reactionTimeMs, 0) / playerData.answers.length / 1000).toFixed(1)
                 : '—';
-              const wagerType = match.wagerType || 'sol';
-              const wagerAmount =
-                (match.wagerAmount && match.wagerAmount > 0)
-                  ? match.wagerAmount
-                  : wagerType === 'sol'
-                  ? match.wagerLamports / 1e9
-                  : match.wagerLamports > 0
-                  ? match.wagerLamports / 1e6
-                  : 0;
-              const formattedWager = wagerAmount > 0
-                ? Number.isInteger(wagerAmount)
-                  ? `${wagerAmount}`
-                  : wagerAmount.toFixed(2)
-                : null;
+              const wagerType: 'sol' | 'skr' = match.wagerType === 'skr' ? 'skr' : 'sol';
+              const stakeAmount = getDisplayWagerAmount(match, wagerType);
+              const houseMultiplier = 1 - HOUSE_CUT_PERCENT / 100;
+              const winnerPayout = stakeAmount * 2 * houseMultiplier;
+              const formattedWinnerPayout = formatAmount(winnerPayout);
+              const formattedLoserLoss = formatAmount(stakeAmount);
               const outcomeText =
                 result === 'draw'
-                  ? (formattedWager ? `±${formattedWager} ${wagerType.toUpperCase()}` : 'DRAW')
-                  : formattedWager
-                  ? `${result === 'win' ? '+' : '-'}${formattedWager} ${wagerType.toUpperCase()}`
-                  : '—';
+                  ? 'DRAW'
+                  : result === 'win'
+                  ? `+${formattedWinnerPayout} ${wagerType.toUpperCase()}`
+                  : `-${formattedLoserLoss} ${wagerType.toUpperCase()}`;
 
               return (
                 <View key={match.id} style={styles.matchCard}>

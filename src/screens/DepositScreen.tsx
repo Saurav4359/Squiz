@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Animated,
+  Easing,
 } from 'react-native';
 import { colors, spacing, borderRadius, fontSize, fontWeight } from '../config/theme';
 import { Match, MatchPlayer } from '../types';
@@ -30,6 +32,13 @@ export default function DepositScreen({
 }: DepositScreenProps) {
   const [myDeposited, setMyDeposited] = useState(false);
   const [timeLeft, setTimeLeft] = useState(60);
+  const leftCoinX = useRef(new Animated.Value(-80)).current;
+  const leftCoinY = useRef(new Animated.Value(-18)).current;
+  const rightCoinX = useRef(new Animated.Value(80)).current;
+  const rightCoinY = useRef(new Animated.Value(-18)).current;
+  const coinOpacity = useRef(new Animated.Value(0)).current;
+  const potScale = useRef(new Animated.Value(1)).current;
+  const readyHandled = useRef(false);
 
   const currentPlayer: MatchPlayer =
     match.playerA.id === currentPlayerId ? match.playerA : match.playerB;
@@ -38,7 +47,7 @@ export default function DepositScreen({
 
   const opponentDeposited = opponent.isReady;
 
-  const wagerDisplay = wagerType === 'sol' ? '0.05 SOL' : '10 SKR';
+  const wagerDisplay = wagerType === 'sol' ? '0.05 SOL' : '50 SKR';
   const accentColor = wagerType === 'sol' ? colors.secondary : colors.purple;
 
   // Countdown timer
@@ -55,10 +64,59 @@ export default function DepositScreen({
 
   // Check if both deposited
   useEffect(() => {
-    if (myDeposited && opponentDeposited) {
-      onBothDeposited();
-    }
-  }, [myDeposited, opponentDeposited, onBothDeposited]);
+    if (!myDeposited || !opponentDeposited || readyHandled.current) return;
+    readyHandled.current = true;
+
+    const dropDuration = 550;
+    Animated.sequence([
+      Animated.timing(coinOpacity, {
+        toValue: 1,
+        duration: 120,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.parallel([
+        Animated.timing(leftCoinX, {
+          toValue: 0,
+          duration: dropDuration,
+          easing: Easing.inOut(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(leftCoinY, {
+          toValue: 32,
+          duration: dropDuration,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(rightCoinX, {
+          toValue: 0,
+          duration: dropDuration,
+          easing: Easing.inOut(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(rightCoinY, {
+          toValue: 32,
+          duration: dropDuration,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.sequence([
+        Animated.spring(potScale, {
+          toValue: 1.14,
+          friction: 6,
+          tension: 120,
+          useNativeDriver: true,
+        }),
+        Animated.spring(potScale, {
+          toValue: 1,
+          friction: 6,
+          tension: 120,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start(() => onBothDeposited());
+  }, [myDeposited, opponentDeposited, onBothDeposited, coinOpacity, leftCoinX, leftCoinY, rightCoinX, rightCoinY, potScale]);
 
   const handleDeposit = useCallback(() => {
     setMyDeposited(true);
@@ -98,6 +156,37 @@ export default function DepositScreen({
       <View style={[styles.wagerCard, { borderColor: accentColor }]}>
         <Text style={styles.wagerLabel}>WAGER AMOUNT</Text>
         <Text style={[styles.wagerAmount, { color: accentColor }]}>{wagerDisplay}</Text>
+      </View>
+
+      <View style={styles.potArea}>
+        <Animated.View style={[styles.potCore, { transform: [{ scale: potScale }] }]}>
+          <Text style={styles.potIcon}>POT</Text>
+          <Text style={styles.potText}>Prize Pot</Text>
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.dropCoin,
+            {
+              opacity: coinOpacity,
+              transform: [{ translateX: leftCoinX }, { translateY: leftCoinY }],
+            },
+          ]}
+        >
+          <Text style={styles.coinText}>{wagerType === 'skr' ? 'SKR' : 'SOL'}</Text>
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.dropCoin,
+            {
+              opacity: coinOpacity,
+              transform: [{ translateX: rightCoinX }, { translateY: rightCoinY }],
+            },
+          ]}
+        >
+          <Text style={styles.coinText}>{wagerType === 'skr' ? 'SKR' : 'SOL'}</Text>
+        </Animated.View>
       </View>
 
       {/* Deposit Status Section */}
@@ -217,7 +306,51 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingVertical: spacing.xxl,
     alignItems: 'center',
-    marginBottom: spacing.xxxl,
+    marginBottom: spacing.lg,
+  },
+  potArea: {
+    width: '100%',
+    height: 82,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xl,
+    position: 'relative',
+  },
+  potCore: {
+    minWidth: 130,
+    backgroundColor: colors.bgCard,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  potIcon: {
+    fontSize: 16,
+    color: colors.text,
+  },
+  potText: {
+    fontSize: 11,
+    fontWeight: fontWeight.semibold,
+    color: colors.textSecondary,
+    letterSpacing: 0.4,
+  },
+  dropCoin: {
+    position: 'absolute',
+    top: 0,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.bgSecondary,
+  },
+  coinText: {
+    fontSize: 11,
+    color: colors.primary,
+    fontWeight: fontWeight.bold,
   },
   wagerLabel: {
     fontSize: fontSize.xs,

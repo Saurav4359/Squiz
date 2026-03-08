@@ -297,7 +297,7 @@ async function isPlayerAInEscrow(matchId: string, playerId: string): Promise<boo
 
 // ─── Display Helpers ──────────────────────────────────────
 export function getWagerDisplay(wagerType: WagerType): string {
-  return wagerType === 'sol' ? '0.05 SOL' : '10 SKR';
+  return wagerType === 'sol' ? '0.05 SOL' : '50 SKR';
 }
 
 export const WAGER_LAMPORTS = SOL_WAGER_LAMPORTS;

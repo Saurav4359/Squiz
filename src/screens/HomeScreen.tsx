@@ -111,7 +111,7 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
 
         <TouchableOpacity style={styles.secondaryButton} onPress={() => onFindMatch('skr')} activeOpacity={0.85}>
           <Text style={styles.secondaryButtonTitle}>SKR TOURNAMENT</Text>
-          <Text style={styles.bodyText}>100 SKR wager • 1.5x XP</Text>
+          <Text style={styles.bodyText}>50 SKR wager • 1.5x XP</Text>
         </TouchableOpacity>
 
         <Text style={styles.sectionTitle}>Daily Quests</Text>
