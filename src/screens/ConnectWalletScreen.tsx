@@ -14,6 +14,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
 import { checkUsernameUnique } from '../services/db/database';
 
@@ -388,13 +389,16 @@ export default function ConnectWalletScreen({
           {/* Feature pills */}
           <View style={styles.featureRow}>
             <View style={styles.featurePill}>
-              <Text style={styles.featureText}>⚡ Real-time</Text>
+              <Ionicons name="flash-outline" size={16} color={colors.primary} style={styles.featureIcon} />
+              <Text style={styles.featureText}>Real-time</Text>
             </View>
             <View style={styles.featurePill}>
-              <Text style={styles.featureText}>🧠 AI Questions</Text>
+              <Ionicons name="sparkles-outline" size={16} color={colors.primary} style={styles.featureIcon} />
+              <Text style={styles.featureText}>Solana Questions</Text>
             </View>
             <View style={styles.featurePill}>
-              <Text style={styles.featureText}>💰 SOL Wagers</Text>
+              <Ionicons name="cash-outline" size={16} color={colors.primary} style={styles.featureIcon} />
+              <Text style={styles.featureText}>SOL Wagers</Text>
             </View>
           </View>
 
@@ -405,16 +409,16 @@ export default function ConnectWalletScreen({
             disabled={connecting}
             activeOpacity={0.8}
           >
-            <View>
-              {connecting ? (
+            {connecting ? (
+              <View style={styles.connectButtonInner}>
                 <ActivityIndicator color={colors.bg} size="small" />
-              ) : (
-                <>
-                  <Text style={styles.connectIcon}>👻</Text>
-                  <Text style={styles.connectText}>CONNECT WALLET</Text>
-                </>
-              )}
-            </View>
+              </View>
+            ) : (
+              <View style={styles.connectButtonInner}>
+                <Ionicons name="wallet-outline" size={24} color={colors.bg} />
+                <Text style={styles.connectText}>CONNECT WALLET</Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           <Text style={styles.walletHint}>
@@ -537,6 +541,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  featureIcon: {
+    marginRight: spacing.xs,
   },
   featureText: {
     fontSize: fontSize.sm,
@@ -547,23 +556,22 @@ const styles = StyleSheet.create({
   connectButton: {
     width: '100%',
     borderRadius: borderRadius.lg,
-    overflow: 'hidden',
+    backgroundColor: colors.primary,
     elevation: 12,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
   },
-  connectGradient: {
-    paddingVertical: spacing.xl,
+  connectButtonInner: {
+    minHeight: 64,
+    paddingHorizontal: spacing.xl,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: borderRadius.lg,
     gap: spacing.md,
-  },
-  connectIcon: {
-    fontSize: 24,
+    backgroundColor: colors.primary,
   },
   connectText: {
     fontSize: fontSize.xl,
