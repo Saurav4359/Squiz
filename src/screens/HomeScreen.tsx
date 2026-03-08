@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
 import { Player, DailyQuest } from '../types';
 import { getRankTitle, getRankColor, calculateLevel, getXPForNextLevel } from '../services/matchmaking/ratingSystem';
+import { getMatchStats } from '../services/matchmaking/matchStats';
 
 interface HomeScreenProps {
   player: Player;
@@ -25,6 +26,24 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
   const rankColor = getRankColor(rating);
   const level = calculateLevel(player.xp);
   const xpProgress = getXPForNextLevel(player.xp);
+  const [stats, setStats] = useState({ active: 0, sol: 0, skr: 0 });
+
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchStats = async () => {
+      const nextStats = await getMatchStats();
+      if (mounted) setStats(nextStats);
+    };
+
+    fetchStats();
+    const interval = setInterval(fetchStats, 5000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -97,6 +116,12 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
           )}
         </View>
 
+        <View style={styles.liveStatsBar}>
+          <Text style={styles.liveStatsText}>Active Players: {stats.active}</Text>
+          <Text style={styles.liveStatsText}>SOL Matching: {stats.sol}</Text>
+          <Text style={styles.liveStatsText}>SKR Matching: {stats.skr}</Text>
+        </View>
+
         {/* Find Match Button */}
         <TouchableOpacity
           style={styles.findMatchButton}
@@ -123,7 +148,7 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
         >
           <Text style={styles.skrMatchIcon}>💎</Text>
           <Text style={styles.skrMatchText}>SKR TOURNAMENT</Text>
-          <Text style={styles.skrMatchSub}>Wager SKR • 1.5x XP</Text>
+          <Text style={styles.skrMatchSub}>100 SKR wager • 1.5x XP</Text>
         </TouchableOpacity>
 
         {/* Daily Quests */}
@@ -337,6 +362,24 @@ const styles = StyleSheet.create({
   },
 
   // Find Match Button
+  liveStatsBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.bgCard,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  liveStatsText: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    fontWeight: fontWeight.semibold,
+  },
+
   findMatchButton: {
     marginBottom: spacing.md,
     borderRadius: borderRadius.lg,

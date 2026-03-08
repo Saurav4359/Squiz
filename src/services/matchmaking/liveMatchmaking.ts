@@ -13,6 +13,40 @@ import { generateGenericQuestions, generateFallbackQuestions } from '../ai/quest
 let queueChannel: any = null;
 let matchChannel: any = null;
 
+function clearQueueChannel() {
+  if (queueChannel) {
+    supabase.removeChannel(queueChannel);
+    queueChannel = null;
+  }
+}
+
+function trackQueueJoin(playerId: string, wagerType: 'sol' | 'skr') {
+  (async () => {
+    const { error } = await supabase
+      .from('match_queue')
+      .upsert({
+        player_id: playerId,
+        wager_type: wagerType,
+        joined_at: Date.now(),
+      });
+    if (error) {
+      console.warn('[Queue] Failed to upsert match_queue:', error.message);
+    }
+  })();
+}
+
+function trackQueueLeave(playerId: string) {
+  (async () => {
+    const { error } = await supabase
+      .from('match_queue')
+      .delete()
+      .eq('player_id', playerId);
+    if (error) {
+      console.warn('[Queue] Failed to delete from match_queue:', error.message);
+    }
+  })();
+}
+
 // ──────────────────────────────────────────────────────────
 // MATCHMAKING QUEUE (broadcast — zero DB queries)
 // ──────────────────────────────────────────────────────────
@@ -34,13 +68,13 @@ export async function joinQueue(
   callbacks: QueueCallbacks
 ): Promise<void> {
   // Clean up any existing channel
-  if (queueChannel) {
-    supabase.removeChannel(queueChannel);
-    queueChannel = null;
-  }
+  clearQueueChannel();
 
   const channelName = `queue:${wagerType}`;
   queueChannel = supabase.channel(channelName);
+
+  // lightweight queue presence tracking for live stats
+  trackQueueJoin(playerId, wagerType);
 
   // Listen for other players seeking
   queueChannel.on('broadcast', { event: 'seeking' }, async (msg: any) => {
@@ -62,6 +96,15 @@ export async function joinQueue(
         payload: { match, creatorId: playerId },
       });
 
+      // both are no longer in queue once match is created
+      trackQueueLeave(playerId);
+      trackQueueLeave(opponent.playerId);
+
+      // Critical: stop listening to queue after match is made.
+      // Without this, an old listener can auto-match the user later
+      // even when they are browsing other screens.
+      clearQueueChannel();
+
       callbacks.onMatched(match);
     } catch (err) {
       console.warn('[Queue] Match creation failed:', err);
@@ -76,6 +119,8 @@ export async function joinQueue(
 
     // Check if we're in this match
     if (match.playerA.id === playerId || match.playerB.id === playerId) {
+      trackQueueLeave(playerId);
+      clearQueueChannel();
       callbacks.onMatched(match);
     }
   });
@@ -96,10 +141,8 @@ export async function joinQueue(
  * Leave the matchmaking queue.
  */
 export function leaveQueue(playerId: string): void {
-  if (queueChannel) {
-    supabase.removeChannel(queueChannel);
-    queueChannel = null;
-  }
+  trackQueueLeave(playerId);
+  clearQueueChannel();
   console.log(`[Queue] Player ${playerId} left queue`);
 }
 

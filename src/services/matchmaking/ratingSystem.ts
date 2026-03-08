@@ -78,15 +78,16 @@ export function calculateXP(
   _isSkrStaker: boolean = false,
   _streakDays: number = 0
 ): number {
-  // Base XP: 20 for win, 5 for loss
-  let xp = won ? 20 : 5;
+  const SOL_WIN_XP = 20;
+  const SOL_LOSS_XP = 5;
+  const SKR_WIN_XP = 30;
+  const SKR_LOSS_XP = 7.5;
 
-  // Multiplier for SKR matches: 1.5x
   if (isSkrMatch) {
-    xp *= 1.5;
+    return won ? SKR_WIN_XP : SKR_LOSS_XP;
   }
 
-  return xp;
+  return won ? SOL_WIN_XP : SOL_LOSS_XP;
 }
 
 /**

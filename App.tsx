@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, AppState, BackHandler, PanResponder } from 'react-native';
 
 import ConnectWalletScreen from './src/screens/ConnectWalletScreen';
 import HomeScreen from './src/screens/HomeScreen';
@@ -31,6 +31,7 @@ import {
 } from './src/services/matchmaking/liveMatchmaking';
 import type { MatchResult } from './src/services/matchmaking/liveMatchmaking';
 import { initializeEscrow, depositToEscrow, getEscrowStatus } from './src/services/wallet/escrow';
+import { startPresenceHeartbeat, stopPresenceHeartbeat } from './src/services/matchmaking/appPresence';
 
 // ─── Screen Type ─────────────────────────────────────────
 type Screen =
@@ -66,11 +67,24 @@ export default function App() {
   const opponentDataRef = React.useRef<{ answers: any[]; score: number } | null>(null);
   const isPlayerARef = React.useRef(false);
   const authoritativeResultRef = React.useRef<MatchResult | null>(null);
+  const screenHistoryRef = React.useRef<Screen[]>(['home']);
+  const isBackNavigationRef = React.useRef(false);
 
   // Keep ref in sync
   useEffect(() => {
     localMatchRef.current = currentMatch;
   }, [currentMatch]);
+
+  useEffect(() => {
+    if (isBackNavigationRef.current) {
+      isBackNavigationRef.current = false;
+      return;
+    }
+    const history = screenHistoryRef.current;
+    if (history[history.length - 1] !== currentScreen) {
+      history.push(currentScreen);
+    }
+  }, [currentScreen]);
 
   // ─── Wallet → Auth bridge ─────────────────────────────
   useEffect(() => {
@@ -80,6 +94,26 @@ export default function App() {
       });
     }
   }, [wallet.connected, wallet.address]);
+
+  useEffect(() => {
+    const playerId = authHook.player?.id;
+    if (!playerId) return;
+
+    startPresenceHeartbeat(playerId);
+
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        startPresenceHeartbeat(playerId);
+      } else {
+        stopPresenceHeartbeat(playerId);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+      stopPresenceHeartbeat(playerId);
+    };
+  }, [authHook.player?.id]);
 
   // App ready
   useEffect(() => {
@@ -361,6 +395,8 @@ export default function App() {
   // Helper: compute ratings and XP from match state
   const computeRatingsAndXP = useCallback((match: Match, winnerId: string | undefined) => {
     const playerId = authHook.player!.id;
+    const effectiveWagerType = match.wagerType || wagerType;
+    const isSkrMatch = effectiveWagerType === 'skr';
     const isPlayerA = match.playerA.id === playerId;
     const isWin = winnerId === playerId;
     const isDraw = winnerId === undefined;
@@ -389,7 +425,7 @@ export default function App() {
 
     const xp = calculateXP(
       isWin,
-      wagerType === 'skr',
+      isSkrMatch,
       correctCount,
       totalQ,
       avgReaction,
@@ -402,7 +438,7 @@ export default function App() {
     const oppCorrectCount = oppAnswers.filter((a: any) => a.isCorrect).length;
     const oppXp = calculateXP(
       !isWin && !isDraw,
-      wagerType === 'skr',
+      isSkrMatch,
       oppCorrectCount,
       totalQ,
       0,
@@ -410,7 +446,7 @@ export default function App() {
       0
     );
 
-    return { rResult, xp, oppXp, isWin, isDraw, correctCount, totalQ };
+    return { rResult, xp, oppXp, isWin, isDraw, correctCount, totalQ, effectiveWagerType };
   }, [authHook.player, wagerType]);
 
   // PlayerA: compute results, broadcast to playerB, persist to DB
@@ -426,7 +462,7 @@ export default function App() {
       : oppScore > myScore ? match.playerB.id
       : undefined;
 
-    const { rResult, xp, oppXp, isWin, isDraw } = computeRatingsAndXP(match, winnerId);
+    const { rResult, xp, oppXp, isWin, isDraw, effectiveWagerType } = computeRatingsAndXP(match, winnerId);
 
     // Broadcast authoritative result to playerB
     const matchResult: MatchResult = {
@@ -459,7 +495,7 @@ export default function App() {
       opponentXpEarned: oppXp,
       isWin,
       isDraw,
-      wagerType,
+      wagerType: effectiveWagerType,
     })
       .then(() => authHook.refreshPlayer())
       .catch((e) => console.warn('[App] Match persist failed:', e));
@@ -493,9 +529,10 @@ export default function App() {
       ? myAnswers.reduce((sum: number, a: any) => sum + a.reactionTimeMs, 0) / myAnswers.length
       : 2000;
 
+    const effectiveWagerType = match.wagerType || wagerType;
     const xp = calculateXP(
       isWin,
-      wagerType === 'skr',
+      effectiveWagerType === 'skr',
       correctCount,
       totalQ,
       avgReaction,
@@ -529,7 +566,7 @@ export default function App() {
       : oppScore > myScore ? (isPlayerA ? match.playerB.id : match.playerA.id)
       : undefined;
 
-    const { rResult, xp, oppXp, isWin, isDraw } = computeRatingsAndXP(match, winnerId);
+    const { rResult, xp, oppXp, isWin, isDraw, effectiveWagerType } = computeRatingsAndXP(match, winnerId);
 
     setRatingResult(rResult);
     setXpEarned(xp);
@@ -553,7 +590,7 @@ export default function App() {
       opponentXpEarned: oppXp,
       isWin,
       isDraw,
-      wagerType,
+      wagerType: effectiveWagerType,
     })
       .then(() => authHook.refreshPlayer())
       .catch((e) => console.warn('[App] Match persist failed:', e));
@@ -574,6 +611,51 @@ export default function App() {
     setCurrentMatch(null);
     setCurrentScreen('home');
   }, [authHook.player]);
+
+  const handleBackNavigation = useCallback((): boolean => {
+    if (!authHook.player) return false;
+
+    if (currentScreen === 'matchmaking' || currentScreen === 'depositing') {
+      handleCancel();
+      return true;
+    }
+
+    const history = screenHistoryRef.current;
+    if (history.length <= 1) return false;
+
+    history.pop();
+    const previous = history[history.length - 1] || 'home';
+    isBackNavigationRef.current = true;
+    if (previous !== 'profile') {
+      setViewedPlayer(null);
+    }
+    setCurrentScreen(previous);
+    return true;
+  }, [authHook.player, currentScreen, handleCancel]);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      return handleBackNavigation();
+    });
+    return () => sub.remove();
+  }, [handleBackNavigation]);
+
+  const swipeBackResponder = React.useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_evt, gestureState) => {
+          const absDx = Math.abs(gestureState.dx);
+          const absDy = Math.abs(gestureState.dy);
+          return absDx > 30 && absDx > absDy * 1.2;
+        },
+        onPanResponderRelease: (_evt, gestureState) => {
+          if (Math.abs(gestureState.dx) >= 90) {
+            handleBackNavigation();
+          }
+        },
+      }),
+    [handleBackNavigation]
+  );
 
   const handlePlayAgain = useCallback(() => {
     setCurrentMatch(null);
@@ -859,7 +941,7 @@ export default function App() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} {...swipeBackResponder.panHandlers}>
       <StatusBar style="light" backgroundColor={colors.bg} />
       {renderScreen()}
       {renderBottomNav()}
