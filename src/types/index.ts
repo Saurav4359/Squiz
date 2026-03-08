@@ -48,6 +48,7 @@ export interface Match {
   questions: Question[];
   currentQuestionIndex: number;
   wagerLamports: number;
+  wagerAmount?: number;
   wagerType?: 'sol' | 'skr';
   escrowAddress?: string;
   status: MatchStatus;

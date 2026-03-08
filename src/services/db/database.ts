@@ -311,6 +311,7 @@ export async function getMatchHistory(playerId: string): Promise<any[]> {
         playerB,
         winnerId: m.winner_id,
         wagerLamports: Number(m.wager_lamports || 0),
+        wagerAmount: Number(m.wager_amount || 0),
         wagerType: m.wager_type || 'sol',
         endedAt: Number(m.ended_at),
       };

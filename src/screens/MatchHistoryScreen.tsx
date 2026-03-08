@@ -111,6 +111,26 @@ export default function MatchHistoryScreen({ playerId, onNavigate }: MatchHistor
               const avgReaction = playerData.answers.length > 0
                 ? (playerData.answers.reduce((s, a) => s + a.reactionTimeMs, 0) / playerData.answers.length / 1000).toFixed(1)
                 : '—';
+              const wagerType = match.wagerType || 'sol';
+              const wagerAmount =
+                (match.wagerAmount && match.wagerAmount > 0)
+                  ? match.wagerAmount
+                  : wagerType === 'sol'
+                  ? match.wagerLamports / 1e9
+                  : match.wagerLamports > 0
+                  ? match.wagerLamports / 1e6
+                  : 0;
+              const formattedWager = wagerAmount > 0
+                ? Number.isInteger(wagerAmount)
+                  ? `${wagerAmount}`
+                  : wagerAmount.toFixed(2)
+                : null;
+              const outcomeText =
+                result === 'draw'
+                  ? (formattedWager ? `±${formattedWager} ${wagerType.toUpperCase()}` : 'DRAW')
+                  : formattedWager
+                  ? `${result === 'win' ? '+' : '-'}${formattedWager} ${wagerType.toUpperCase()}`
+                  : '—';
 
               return (
                 <View key={match.id} style={styles.matchCard}>
@@ -153,8 +173,7 @@ export default function MatchHistoryScreen({ playerId, onNavigate }: MatchHistor
                       </View>
                       <View style={styles.statItem}>
                         <Text style={[styles.statValue, { color: resultColor }]}>
-                          {result === 'win' ? '+' : result === 'loss' ? '-' : ''}
-                          {(match.wagerLamports / (match.wagerType === 'skr' ? 1e6 : 1e9)).toFixed(2)} {match.wagerType?.toUpperCase() || 'SOL'}
+                          {outcomeText}
                         </Text>
                         <Text style={styles.statLabel}>Outcome</Text>
                       </View>
@@ -229,7 +248,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
 
-  matchList: { padding: spacing.md, gap: spacing.sm },
+  matchList: { padding: 8, gap: 4 },
 
   matchCard: {
     backgroundColor: colors.bgCard,
@@ -238,17 +257,17 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     flexDirection: 'row',
     overflow: 'hidden',
-    marginBottom: spacing.md,
+    marginBottom: 6,
   },
   resultBar: {
     width: 4,
   },
-  matchContent: { flex: 1, paddingVertical: spacing.md, paddingHorizontal: spacing.lg },
+  matchContent: { flex: 1, paddingVertical: 6, paddingHorizontal: 9 },
   matchHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: 2,
   },
   resultLabel: {
     fontSize: fontSize.sm,
@@ -256,7 +275,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   matchDate: {
-    fontSize: fontSize.xs,
+    fontSize: 11,
     color: colors.textDim,
   },
 
@@ -264,18 +283,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
-    gap: spacing.xl,
+    marginVertical: 2,
+    gap: spacing.md,
   },
   scoreBox: { alignItems: 'center' },
-  scoreLabel: { fontSize: fontSize.xs, color: colors.textSecondary, marginBottom: 2 },
-  scoreNum: { fontSize: fontSize.xl, fontWeight: fontWeight.extrabold, color: colors.text },
+  scoreLabel: { fontSize: 11, color: colors.textSecondary, marginBottom: 1 },
+  scoreNum: { fontSize: 16, fontWeight: fontWeight.extrabold, color: colors.text },
   scoreSep: { fontSize: fontSize.sm, color: colors.textDim },
 
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  statItem: { alignItems: 'center' },
-  statValue: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.text },
-  statLabel: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 2 },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 2 },
+  statItem: { alignItems: 'center', paddingHorizontal: 2 },
+  statValue: { fontSize: 13, fontWeight: fontWeight.bold, color: colors.text },
+  statLabel: { fontSize: 10, color: colors.textSecondary, marginTop: 1 },
 
   bottomNav: {
     flexDirection: 'row',
