@@ -7,9 +7,10 @@ import {
   ScrollView,
   StatusBar,
 } from 'react-native';
-import { colors, spacing, borderRadius } from '../config/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, spacing } from '../config/theme';
 import { Player, DailyQuest } from '../types';
-import { getRankTitle, getRankColor, calculateLevel, getXPForNextLevel } from '../services/matchmaking/ratingSystem';
+import { getRankTitle, calculateLevel, getXPForNextLevel } from '../services/matchmaking/ratingSystem';
 import { getMatchStats } from '../services/matchmaking/matchStats';
 import { subscribeActivePlayers } from '../services/matchmaking/livePresence';
 
@@ -23,7 +24,6 @@ interface HomeScreenProps {
 export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuests }: HomeScreenProps) {
   const rating = player.rating || 1200;
   const rankTitle = getRankTitle(rating);
-  const rankColor = getRankColor(rating);
   const level = calculateLevel(player.xp);
   const xpProgress = getXPForNextLevel(player.xp);
   const [stats, setStats] = useState({ active: 0, sol: 0, skr: 0 });
@@ -58,29 +58,49 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.profileCard}>
-          <View style={styles.profileHeader}>
-            <View style={styles.avatarContainer}>
-              <Text style={styles.avatarText}>{player.username.charAt(0).toUpperCase()}</Text>
-            </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.screenTitle}>{player.username}</Text>
-              <View style={styles.ratingRow}>
-                <Text style={[styles.bodyText, { color: rankColor }]}>{rankTitle}</Text>
-                <Text style={styles.cardTitle}>{rating}</Text>
+        <View style={styles.playerCardWrap}>
+          <View style={styles.playerCardGlow} />
+          <View style={styles.playerCard}>
+            <View style={styles.profileHeader}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{player.username.charAt(0).toUpperCase()}</Text>
+              </View>
+              <View style={styles.profileInfo}>
+                <Text style={styles.usernameText}>{player.username}</Text>
+                <View style={styles.ratingRow}>
+                  <Text style={styles.rankText}>{rankTitle}</Text>
+                  <Text style={styles.cardTitle}>{rating}</Text>
+                </View>
               </View>
             </View>
-          </View>
 
-          <View style={styles.xpBarBg}>
-            <View style={[styles.xpBarFill, { width: `${xpProgress.progress * 100}%` }]} />
-          </View>
-          <Text style={styles.bodyText}>{xpProgress.current} / {xpProgress.required} XP • Level {level}</Text>
+            <View style={styles.xpBarBackground}>
+              <View style={[styles.xpBarProgress, { width: `${xpProgress.progress * 100}%` }]} />
+              <View
+                style={[
+                  styles.xpFlameWrap,
+                  { left: `${Math.max(0, Math.min(100, xpProgress.progress * 100))}%` },
+                ]}
+              >
+                <Ionicons name="flame" size={14} color="#FB923C" />
+              </View>
+            </View>
+            <Text style={styles.xpText}>{xpProgress.current} / {xpProgress.required} XP • Level {level}</Text>
 
-          <View style={styles.statsBar}>
-            <View style={styles.statCard}><Text style={styles.bodyText}>🟢 {stats.active} Online</Text></View>
-            <View style={styles.statCard}><Text style={styles.bodyText}>⚡ {stats.sol} SOL Battles</Text></View>
-            <View style={styles.statCard}><Text style={styles.bodyText}>💎 {stats.skr} SKR Battles</Text></View>
+            <View style={styles.statsContainer}>
+              <View style={styles.statBadge}>
+                <Ionicons name="people-outline" size={18} color="#22C55E" />
+                <Text style={styles.statText} numberOfLines={1}>{stats.active} Active Users</Text>
+              </View>
+              <View style={styles.statBadge}>
+                <Ionicons name="flash-outline" size={18} color="#FACC15" />
+                <Text style={styles.statText} numberOfLines={1}>{stats.sol} SOL Matchmakers</Text>
+              </View>
+              <View style={styles.statBadge}>
+                <Ionicons name="diamond-outline" size={18} color="#60A5FA" />
+                <Text style={styles.statText} numberOfLines={1}>{stats.skr} SKR Matchmakers</Text>
+              </View>
+            </View>
           </View>
         </View>
 
@@ -94,7 +114,7 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
           <Text style={styles.bodyText}>100 SKR wager • 1.5x XP</Text>
         </TouchableOpacity>
 
-        <Text style={styles.screenTitle}>Daily Quests</Text>
+        <Text style={styles.sectionTitle}>Daily Quests</Text>
         {dailyQuests.map((quest) => (
           <View key={quest.id} style={styles.questCard}>
             <View style={styles.questHeader}>
@@ -137,43 +157,98 @@ const cardBase = {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  scrollView: { flex: 1, paddingHorizontal: spacing.lg },
-  profileCard: { ...cardBase, marginTop: spacing.xxl + 20, marginBottom: spacing.md },
-  profileHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
-  avatarContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.bgSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
+  scrollView: { flex: 1, paddingHorizontal: spacing.md },
+  playerCardWrap: { marginTop: spacing.xxl, marginBottom: spacing.sm, position: 'relative' },
+  playerCardGlow: {
+    position: 'absolute',
+    width: 250,
+    height: 250,
+    borderRadius: 200,
+    backgroundColor: '#D0FF80',
+    opacity: 0.08,
+    top: -80,
+    right: -60,
+  },
+  playerCard: {
+    backgroundColor: '#18181B',
+    borderRadius: 22,
+    padding: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#27272A',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 25,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
+    overflow: 'hidden',
+  },
+  profileHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  avatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0B0B0F',
+    borderWidth: 2,
+    borderColor: '#D0FF80',
+    shadowColor: '#D0FF80',
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
   },
   avatarText: { fontSize: 24, fontWeight: '700', color: colors.text },
-  profileInfo: { marginLeft: spacing.md, flex: 1 },
-  screenTitle: { fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: spacing.md },
+  profileInfo: { marginLeft: 8, flex: 1 },
+  usernameText: { fontSize: 20, fontWeight: '700', color: '#FFFFFF' },
+  rankText: { fontSize: 14, color: '#A1A1AA' },
+  sectionTitle: { fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: spacing.md },
   cardTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
   bodyText: { fontSize: 14, color: colors.textSecondary },
   ratingRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
-  xpBarBg: {
+  xpBarBackground: {
     height: 8,
-    borderRadius: 18,
-    backgroundColor: colors.bgSecondary,
+    borderRadius: 6,
+    backgroundColor: '#27272A',
     overflow: 'hidden',
-    marginBottom: spacing.sm,
+    marginBottom: 6,
   },
-  xpBarFill: { height: '100%', backgroundColor: colors.primary },
-  statsBar: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.bgSecondary,
-    borderRadius: 18,
-    padding: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
+  xpBarProgress: {
+    height: 8,
+    borderRadius: 6,
+    backgroundColor: '#D0FF80',
+    shadowColor: '#D0FF80',
+    shadowOpacity: 0.7,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  xpFlameWrap: {
+    position: 'absolute',
+    top: -4,
+    marginLeft: -7,
+  },
+  xpText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginBottom: 10,
+  },
+  statsContainer: {
+    flexDirection: 'column',
+    marginTop: 10,
+  },
+  statBadge: {
+    width: '100%',
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginBottom: 6,
+    backgroundColor: '#101014',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#27272A',
   },
+  statText: { color: '#FFFFFF', fontSize: 12, marginLeft: 6, flexShrink: 1 },
   findMatchButton: {
     backgroundColor: colors.primary,
     borderRadius: 22,
