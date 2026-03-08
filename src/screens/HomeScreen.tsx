@@ -27,6 +27,8 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
   const rankTitle = getRankTitle(rating);
   const level = calculateLevel(player.xp);
   const xpProgress = getXPForNextLevel(player.xp);
+  const solBalance = walletBalance?.sol ?? 0;
+  const skrBalance = walletBalance?.skr ?? 0;
   const [stats, setStats] = useState({ active: 0, sol: 0, skr: 0 });
 
   useEffect(() => {
@@ -62,11 +64,11 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
         <View style={styles.balanceRow}>
           <View style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>SOL BALANCE</Text>
-            <Text style={styles.balanceValue}>◎ {walletBalance.sol.toFixed(3)}</Text>
+            <Text style={styles.balanceValue}>◎ {solBalance.toFixed(3)}</Text>
           </View>
           <View style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>SKR BALANCE</Text>
-            <Text style={[styles.balanceValue, styles.balanceAccent]}>💎 {walletBalance.skr.toFixed(2)}</Text>
+            <Text style={[styles.balanceValue, styles.balanceAccent]}>💎 {skrBalance.toFixed(2)}</Text>
           </View>
         </View>
 
