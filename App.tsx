@@ -963,6 +963,25 @@ export default function App() {
     }
   };
 
+  const renderBalanceHeader = () => {
+    if (!wallet.connected || !authHook.player) return null;
+    const sol = wallet.balance.sol || 0;
+    const skr = wallet.balance.skr || 0;
+
+    return (
+      <View style={styles.balanceHeader}>
+        <View style={styles.balanceBox}>
+          <Text style={styles.balanceLabel}>SOL</Text>
+          <Text style={styles.balanceValue}>◎ {sol.toFixed(3)}</Text>
+        </View>
+        <View style={styles.balanceBox}>
+          <Text style={styles.balanceLabel}>SKR</Text>
+          <Text style={[styles.balanceValue, styles.balanceAccent]}>💎 {skr.toFixed(2)}</Text>
+        </View>
+      </View>
+    );
+  };
+
   const renderBottomNav = () => {
     const mainScreens = ['home', 'leaderboard', 'quests', 'history', 'profile'];
     if (!authHook.player || !mainScreens.includes(currentScreen)) return null;
@@ -1029,6 +1048,7 @@ export default function App() {
   return (
     <View style={styles.container} {...swipeBackResponder.panHandlers}>
       <StatusBar style="light" backgroundColor={colors.bg} />
+      {renderBalanceHeader()}
       {renderScreen()}
       {renderBottomNav()}
     </View>
@@ -1114,5 +1134,37 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 32,
     opacity: 0.6,
+  },
+  balanceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  balanceBox: {
+    flex: 1,
+    marginHorizontal: 4,
+    backgroundColor: colors.bgCard,
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  balanceLabel: {
+    fontSize: 10,
+    letterSpacing: 1,
+    color: colors.textSecondary,
+  },
+  balanceValue: {
+    fontSize: 16,
+    fontWeight: fontWeight.extrabold,
+    color: colors.text,
+    marginTop: 4,
+  },
+  balanceAccent: {
+    color: colors.primary,
   },
 });
