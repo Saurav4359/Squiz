@@ -213,7 +213,7 @@ export default function ConnectWalletScreen({
           </View>
         </View>
         <View style={styles.textArea}>
-          <Text style={styles.title}>AUTHENTICATING</Text>
+          <Text style={styles.authTitle}>AUTHENTICATING</Text>
           <Text style={styles.subtitle}>
             Fetching your Squiz profile...
           </Text>
@@ -540,6 +540,17 @@ const styles = StyleSheet.create({
     letterSpacing: 8,
     textAlign: 'center',
     textShadowColor: colors.primary, // Core glow
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+    textTransform: 'uppercase',
+  },
+  authTitle: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: colors.text,
+    letterSpacing: 4,
+    textAlign: 'center',
+    textShadowColor: colors.primary,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 8,
     textTransform: 'uppercase',
