@@ -237,6 +237,42 @@ export default function App() {
     };
   }, [currentScreen, currentMatch?.id]);
 
+  // Real-time payout listener for Results screen
+  useEffect(() => {
+    if (currentScreen !== 'results' || !currentMatch) return;
+
+    console.log(`[Results] Listening for payout updates on match ${currentMatch.id}`);
+    
+    // Listen for the payout getting finalized on chain & stored in DB
+    const channel = supabase
+      .channel(`match_payout:${currentMatch.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'matches',
+        filter: `id=eq.${currentMatch.id}`
+      }, (payload) => {
+        const updated = payload.new;
+        if (updated.payout_tx) {
+          console.log(`[Results] Payout detected via Realtime: ${updated.payout_tx}`);
+          // Update local match state so both players see the payout
+          setCurrentMatch(prev => {
+            if (!prev || prev.id !== updated.id) return prev;
+            return {
+              ...prev,
+              payoutTx: updated.payout_tx,
+              payoutLamports: Number(updated.payout_lamports)
+            };
+          });
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentScreen, currentMatch?.id]);
+
   // ─── Handlers ──────────────────────────────────────────
   const handleWalletConnect = useCallback(async () => {
     await wallet.connect();

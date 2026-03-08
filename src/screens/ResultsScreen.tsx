@@ -98,6 +98,12 @@ export default function ResultsScreen({
     ? (match.payoutLamports / 1_000_000_000).toFixed(4)
     : null;
 
+  const wagerSOL = match.wagerLamports
+    ? (match.wagerLamports / LAMPORTS_PER_SOL).toFixed(4)
+    : '0';
+
+  const isSolWager = match.wagerType === 'sol' || !match.wagerType;
+
   const openExplorer = (txSig: string) => {
     Linking.openURL(`https://explorer.solana.com/tx/${txSig}?cluster=devnet`);
   };
@@ -235,7 +241,7 @@ export default function ResultsScreen({
           style={[styles.card, { opacity: fadeIn3, transform: [{ translateY: slideUp3 }] }]}
         >
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Rewards</Text>
+            <Text style={styles.cardTitle}>Rewards & Outcome</Text>
           </View>
           <View style={styles.rewardsGrid}>
             <View style={styles.rewardItem}>
@@ -244,37 +250,58 @@ export default function ResultsScreen({
             </View>
             <View style={styles.rewardDivider} />
             <View style={styles.rewardItem}>
-              <Text style={styles.rewardValue}>
-                {correctAnswers}/{totalQuestions}
+              <Text style={[
+                styles.rewardValue,
+                { color: isWinner ? colors.primary : isDraw ? colors.text : colors.danger }
+              ]}>
+                {isSolWager ? (isWinner ? `+${payoutSOL || '...'}` : isDraw ? 'REFUND' : `-${wagerSOL}`) : 'SKR'}
               </Text>
-              <Text style={styles.rewardLabel}>Accuracy</Text>
+              <Text style={styles.rewardLabel}>{isWinner ? 'Profit' : 'Outcome'}</Text>
             </View>
             <View style={styles.rewardDivider} />
             <View style={styles.rewardItem}>
-              <Text style={styles.rewardValue}>
-                {(avgReactionTime / 1000).toFixed(1)}s
-              </Text>
-              <Text style={styles.rewardLabel}>Avg Speed</Text>
+              <Text style={styles.rewardValue}>{wagerSOL}</Text>
+              <Text style={styles.rewardLabel}>Wagered</Text>
             </View>
           </View>
         </Animated.View>
 
-        {/* Payout Info (only show when winner and payout exists) */}
-        {isWinner && payoutSOL && (
-          <View style={[styles.card, styles.payoutCard]}>
+        {/* Payout Info */}
+        {isWinner && (
+          <View style={[styles.card, styles.payoutCard, !payoutSOL && { borderColor: colors.textDim }]}>
             <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>💰 Payout</Text>
+              <Text style={styles.cardTitle}>💰 {payoutSOL ? 'Payout Confirmed' : 'Payout Processing'}</Text>
             </View>
-            <Text style={styles.payoutAmount}>{payoutSOL} SOL</Text>
-            <Text style={styles.payoutLabel}>sent to your wallet</Text>
-            {match.payoutTx && (
-              <TouchableOpacity
-                style={styles.explorerBtn}
-                onPress={() => openExplorer(match.payoutTx!)}
-              >
-                <Text style={styles.explorerBtnText}>View on Solana Explorer ↗</Text>
-              </TouchableOpacity>
+            {payoutSOL ? (
+              <>
+                <Text style={styles.payoutAmount}>{payoutSOL} SOL</Text>
+                <Text style={styles.payoutLabel}>successfully sent to your wallet</Text>
+                {match.payoutTx && (
+                  <TouchableOpacity
+                    style={styles.explorerBtn}
+                    onPress={() => openExplorer(match.payoutTx!)}
+                  >
+                    <Text style={styles.explorerBtnText}>View on Solana Explorer ↗</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            ) : (
+              <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
+                <Text style={[styles.payoutLabel, { marginTop: spacing.lg }]}>
+                  Securing your winnings on-chain...
+                </Text>
+              </View>
             )}
+          </View>
+        )}
+
+        {!isWinner && !isDraw && (
+          <View style={[styles.card, { borderColor: colors.danger + '44' }]}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>💸 Loss Detail</Text>
+            </View>
+            <Text style={[styles.payoutAmount, { color: colors.danger }]}>-{wagerSOL} SOL</Text>
+            <Text style={styles.payoutLabel}>wager collected for the prize pool</Text>
           </View>
         )}
 
@@ -283,7 +310,8 @@ export default function ResultsScreen({
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>🤝 Draw — Refund</Text>
             </View>
-            <Text style={styles.payoutLabel}>Wagers are being refunded</Text>
+            <Text style={styles.payoutAmount}>{wagerSOL} SOL</Text>
+            <Text style={styles.payoutLabel}>Wagers are being returned to both players</Text>
           </View>
         )}
 
