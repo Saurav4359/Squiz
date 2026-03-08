@@ -229,7 +229,7 @@ export default function ProfileScreen({
           <View style={styles.rowBetween}><Text style={styles.bodyText}>Address</Text><Text style={styles.bodyText}>{player.walletAddress.slice(0, 4)}...{player.walletAddress.slice(-4)}</Text></View>
           {walletBalance && (
             <>
-              <View style={styles.rowBetween}><Text style={styles.bodyText}>SOL</Text><Text style={styles.valueText}>◎ {walletBalance.sol.toFixed(4)}</Text></View>
+              <View style={styles.rowBetween}><Text style={styles.bodyText}>SOL</Text><Text style={styles.valueText}>◎ {walletBalance.sol}</Text></View>
               {walletBalance.skr > 0 && <View style={styles.rowBetween}><Text style={styles.bodyText}>SKR</Text><Text style={[styles.valueText, { color: colors.accent }]}>💎 {walletBalance.skr.toLocaleString()}</Text></View>}
             </>
           )}

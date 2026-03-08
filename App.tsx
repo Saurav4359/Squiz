@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, AppState, BackHandler, PanResponder } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, AppState, BackHandler, PanResponder, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import ConnectWalletScreen from './src/screens/ConnectWalletScreen';
@@ -31,7 +31,7 @@ import {
   finishLiveMatch,
 } from './src/services/matchmaking/liveMatchmaking';
 import type { MatchResult } from './src/services/matchmaking/liveMatchmaking';
-import { initializeEscrow, depositToEscrow, getEscrowStatus } from './src/services/wallet/escrow';
+
 import { joinLivePresence, leaveLivePresence } from './src/services/matchmaking/livePresence';
 
 // ─── Screen Type ─────────────────────────────────────────
@@ -59,6 +59,12 @@ export default function App() {
   const localMatchRef = React.useRef<Match | null>(null);
   const [ratingResult, setRatingResult] = useState<any>(null);
   const [xpEarned, setXpEarned] = useState(0);
+  const [escrowState, setEscrowState] = useState<{
+    status: string;
+    playerADeposited: boolean;
+    playerBDeposited: boolean;
+  } | null>(null);
+  const [depositing, setDepositing] = useState(false);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [viewedPlayer, setViewedPlayer] = useState<Player | null>(null);
   const [leaderboardCache, setLeaderboardCache] = useState<Record<string, LeaderboardEntry[]>>({});
@@ -208,14 +214,37 @@ export default function App() {
     return () => { isCancelled = true; };
   }, [currentScreen, authHook.player]);
 
+  useEffect(() => {
+    if (currentScreen !== 'depositing' || !currentMatch) return;
+
+    let cancelled = false;
+
+    // TODO: implement actual treasury check for deposits instead of simulated
+    const syncEscrowState = async () => {
+      if (!cancelled) {
+        // Mock state: waiting for deposit
+        setEscrowState({
+          status: 'AwaitingDeposits',
+          playerADeposited: false,
+          playerBDeposited: false
+        });
+      }
+    };
+
+    syncEscrowState();
+    const interval = setInterval(syncEscrowState, 1500);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [currentScreen, currentMatch?.id]);
+
   // ─── Handlers ──────────────────────────────────────────
   const handleWalletConnect = useCallback(async () => {
     await wallet.connect();
   }, [wallet]);
 
-  const handleDevConnect = useCallback(async () => {
-    await wallet.devConnect();
-  }, [wallet]);
 
   const handleCreateProfile = useCallback(
     async (username: string, password?: string, twitter?: string) => {
@@ -251,6 +280,8 @@ export default function App() {
       setCurrentMatch(null);
       setRatingResult(null);
       setXpEarned(0);
+      setEscrowState(null);
+      setDepositing(false);
       opponentFinishedRef.current = false;
       opponentDataRef.current = null;
       isPlayerARef.current = false;
@@ -261,6 +292,7 @@ export default function App() {
 
       joinQueue(
         authHook.player.id,
+        authHook.player.walletAddress,
         authHook.player.username,
         playerRating,
         wager,
@@ -299,21 +331,18 @@ export default function App() {
               },
             });
 
-            // Initialize escrow (backend creates on-chain or dev simulation)
-            const playerAWallet = match.playerA.id;
-            const playerBWallet = match.playerB.id;
-            initializeEscrow(match.id, playerAWallet, playerBWallet, wager, wallet.authToken || 'dev_token')
-              .catch((e) => console.warn('[App] Escrow init failed:', e));
-
-            // Show VS screen briefly then transition to deposit
-            await new Promise((r) => setTimeout(r, 2500));
-            if (sessionId !== matchSessionRef.current) return;
-
-            // In dev mode, skip deposit screen and go straight to battle
-            if (!wallet.authToken || wallet.authToken === 'dev_token') {
-              setCurrentScreen('battle');
+            if (match.playerA.id === authHook.player!.id) {
+              // Wait before transitioning to depositing screen
+              setTimeout(() => {
+                if (sessionId !== matchSessionRef.current) return;
+                setCurrentScreen('depositing');
+              }, 2500);
             } else {
-              setCurrentScreen('depositing');
+              // For playerB
+              setTimeout(() => {
+                if (sessionId !== matchSessionRef.current) return;
+                setCurrentScreen('depositing');
+              }, 2500);
             }
           },
           onError: (err) => {
@@ -509,6 +538,15 @@ export default function App() {
     return { rResult, xp, oppXp, isWin, isDraw, correctCount, totalQ, effectiveWagerType };
   }, [authHook.player, wagerType]);
 
+  const settleMatchEscrow = useCallback(async (
+    match: Match,
+    winnerId: string | undefined,
+    effectiveWagerType: 'sol' | 'skr',
+  ) => {
+    // Escrow logic removed as we use treasury-wallet payout pattern.
+    // The backend will handle transferring the pot.
+  }, []);
+
   // PlayerA: compute results, broadcast to playerB, persist to DB
   const computeResultsAsAuthority = useCallback(() => {
     const match = localMatchRef.current;
@@ -560,9 +598,12 @@ export default function App() {
       .then(() => authHook.refreshPlayer())
       .catch((e) => console.warn('[App] Match persist failed:', e));
 
+    settleMatchEscrow(finishedMatch, winnerId, effectiveWagerType)
+      .catch((e) => console.warn('[App] Escrow settlement failed:', e));
+
     leaveMatchChannel();
     setCurrentScreen('results');
-  }, [authHook.player, wagerType, computeRatingsAndXP]);
+  }, [authHook.player, wagerType, computeRatingsAndXP, settleMatchEscrow]);
 
   // PlayerB: apply authoritative result from playerA (no DB persist)
   const applyAuthoritativeResult = useCallback((result: MatchResult) => {
@@ -655,9 +696,12 @@ export default function App() {
       .then(() => authHook.refreshPlayer())
       .catch((e) => console.warn('[App] Match persist failed:', e));
 
+    settleMatchEscrow(finishedMatch, winnerId, effectiveWagerType)
+      .catch((e) => console.warn('[App] Escrow settlement failed:', e));
+
     leaveMatchChannel();
     setCurrentScreen('results');
-  }, [authHook.player, wagerType, computeRatingsAndXP]);
+  }, [authHook.player, wagerType, computeRatingsAndXP, settleMatchEscrow]);
 
   const handleMatchEnd = useCallback(() => setCurrentScreen('results'), []);
   const handleNavigate = useCallback((s: string) => setCurrentScreen(s as Screen), []);
@@ -669,6 +713,8 @@ export default function App() {
     }
     leaveMatchChannel();
     setCurrentMatch(null);
+    setEscrowState(null);
+    setDepositing(false);
     setCurrentScreen('home');
   }, [authHook.player]);
 
@@ -728,21 +774,38 @@ export default function App() {
   }, []);
 
   // ─── DEPOSIT HANDLERS ──────────────────────────────────
-  const handleDeposit = useCallback(async () => {
-    if (!currentMatch || !authHook.player) return;
-    const result = await depositToEscrow(
-      currentMatch.id,
-      authHook.player.id,
-      wallet.address || '',
-      wallet.authToken || 'dev_token',
-      wagerType,
-    );
-    if (!result.success) {
-      console.warn('[App] Deposit failed');
-    }
-  }, [currentMatch, authHook.player, wallet.address, wallet.authToken, wagerType]);
+  const handleDeposit = useCallback(async (): Promise<boolean> => {
+    if (!currentMatch || !authHook.player) return false;
+    setDepositing(true);
+    
+    // Simulate transaction delay
+    await new Promise(r => setTimeout(r, 1500));
+    
+    setDepositing(false);
+    
+    // Mock successful deposit update
+    setEscrowState(prev => {
+      const isPlayerA = currentMatch.playerA.id === authHook.player?.id;
+      return {
+        status: prev?.status || 'AwaitingDeposits',
+        playerADeposited: isPlayerA ? true : !!prev?.playerADeposited,
+        playerBDeposited: !isPlayerA ? true : !!prev?.playerBDeposited,
+      };
+    });
+    
+    return true;
+  }, [currentMatch, authHook.player]);
 
   const handleBothDeposited = useCallback(() => {
+    setCurrentMatch((prev) =>
+      prev
+        ? {
+            ...prev,
+            status: 'in_progress',
+            startedAt: prev.startedAt || Date.now(),
+          }
+        : prev
+    );
     setCurrentScreen('battle');
   }, []);
 
@@ -801,7 +864,6 @@ export default function App() {
         <StatusBar style="light" backgroundColor={colors.bg} />
         <ConnectWalletScreen
           onConnect={handleWalletConnect}
-          onDevConnect={handleDevConnect}
           onCreateProfile={handleCreateProfile}
           onLogin={handleLogin}
           connecting={wallet.connecting}
@@ -840,19 +902,24 @@ export default function App() {
             match={currentMatch}
           />
         );
-      case 'depositing':
+      case 'depositing': {
         if (!currentMatch) return null;
+        const isPlayerAInEscrow = currentMatch.playerA.id === player.id;
         return (
           <DepositScreen
             match={currentMatch}
             currentPlayerId={player.id}
             wagerType={wagerType}
+            myDeposited={isPlayerAInEscrow ? !!escrowState?.playerADeposited : !!escrowState?.playerBDeposited}
+            opponentDeposited={isPlayerAInEscrow ? !!escrowState?.playerBDeposited : !!escrowState?.playerADeposited}
+            depositing={depositing}
             onDeposited={handleDeposit}
             onBothDeposited={handleBothDeposited}
             onTimeout={handleDepositTimeout}
             onCancel={handleCancel}
           />
         );
+      }
       case 'battle':
         if (!currentMatch) return null;
         return (

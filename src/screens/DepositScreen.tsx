@@ -15,7 +15,10 @@ interface DepositScreenProps {
   match: Match;
   currentPlayerId: string;
   wagerType: 'sol' | 'skr';
-  onDeposited: () => void;
+  myDeposited: boolean;
+  opponentDeposited: boolean;
+  depositing: boolean;
+  onDeposited: () => Promise<boolean>;
   onBothDeposited: () => void;
   onTimeout: () => void;
   onCancel: () => void;
@@ -25,12 +28,14 @@ export default function DepositScreen({
   match,
   currentPlayerId,
   wagerType,
+  myDeposited,
+  opponentDeposited,
+  depositing,
   onDeposited,
   onBothDeposited,
   onTimeout,
   onCancel,
 }: DepositScreenProps) {
-  const [myDeposited, setMyDeposited] = useState(false);
   const [timeLeft, setTimeLeft] = useState(60);
   const leftCoinX = useRef(new Animated.Value(-80)).current;
   const leftCoinY = useRef(new Animated.Value(-18)).current;
@@ -44,8 +49,6 @@ export default function DepositScreen({
     match.playerA.id === currentPlayerId ? match.playerA : match.playerB;
   const opponent: MatchPlayer =
     match.playerA.id === currentPlayerId ? match.playerB : match.playerA;
-
-  const opponentDeposited = opponent.isReady;
 
   const wagerDisplay = wagerType === 'sol' ? '0.05 SOL' : '50 SKR';
   const accentColor = wagerType === 'sol' ? colors.secondary : colors.purple;
@@ -119,8 +122,7 @@ export default function DepositScreen({
   }, [myDeposited, opponentDeposited, onBothDeposited, coinOpacity, leftCoinX, leftCoinY, rightCoinX, rightCoinY, potScale]);
 
   const handleDeposit = useCallback(() => {
-    setMyDeposited(true);
-    onDeposited();
+    void onDeposited();
   }, [onDeposited]);
 
   const timerColor =
@@ -198,8 +200,17 @@ export default function DepositScreen({
               <Text style={styles.checkmark}>✓</Text>
               <Text style={styles.statusCompleteText}>Deposited</Text>
             </View>
+          ) : depositing ? (
+            <View style={styles.statusWaiting}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.statusCompleteText}>Depositing...</Text>
+            </View>
           ) : (
-            <TouchableOpacity style={[styles.depositButton, { backgroundColor: accentColor }]} onPress={handleDeposit}>
+            <TouchableOpacity
+              style={[styles.depositButton, { backgroundColor: accentColor }]}
+              onPress={handleDeposit}
+              disabled={depositing}
+            >
               <Text style={styles.depositButtonText}>Deposit</Text>
             </TouchableOpacity>
           )}

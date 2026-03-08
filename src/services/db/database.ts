@@ -272,6 +272,7 @@ export async function persistMatchResult(data: any): Promise<void> {
         player_b: match.playerB,
         winner_id: match.winnerId || null,
         wager_lamports: match.wagerLamports || 0,
+        wager_amount: match.wagerAmount || 0,
         wager_type: wagerType || 'sol',
         created_at: match.createdAt,
         ended_at: now,

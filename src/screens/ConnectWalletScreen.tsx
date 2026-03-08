@@ -22,7 +22,7 @@ const { width } = Dimensions.get('window');
 
 interface ConnectWalletScreenProps {
   onConnect: () => Promise<void>;
-  onDevConnect: () => Promise<void>;
+  onDevConnect?: () => Promise<void>;
   onCreateProfile: (username: string, password?: string, twitter?: string) => Promise<void>;
   onLogin: (username: string, password: string) => Promise<void>;
   connecting: boolean;
@@ -49,7 +49,6 @@ export default function ConnectWalletScreen({
   const [password, setPassword] = useState('');
   const [twitter, setTwitter] = useState('');
   const [isLoginMode, setIsLoginMode] = useState(false);
-  const [devPressCount, setDevPressCount] = useState(0);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -115,16 +114,6 @@ export default function ConnectWalletScreen({
     }
   }, [isNewUser]);
 
-  const handleLogoPress = () => {
-    const next = devPressCount + 1;
-    setDevPressCount(next);
-    if (next >= 3) {
-      setDevPressCount(0);
-      onDevConnect();
-    }
-    // Reset count after 2 seconds of inactivity
-    setTimeout(() => setDevPressCount(0), 2000);
-  };
 
   const handleAuthAction = async () => {
     const trimmed = username.trim();
@@ -336,8 +325,27 @@ export default function ConnectWalletScreen({
                 styles.createButton,
                 (username.trim().length < 3 || password.trim().length < 6) && styles.createButtonDisabled,
               ]}
-              onPress={handleAuthAction}
-              disabled={username.trim().length < 3 || password.trim().length < 6 || loading || checkingUsername}
+              onPress={() => {
+                const trimmed = username.trim();
+                if (trimmed.length === 0) {
+                  setLocalError('Please enter a username');
+                  return;
+                }
+                if (trimmed.length < 3) {
+                  setLocalError('Username must be at least 3 characters');
+                  return;
+                }
+                if (password.trim().length === 0) {
+                  setLocalError('Please enter a password');
+                  return;
+                }
+                if (password.trim().length < 6) {
+                  setLocalError('Password must be at least 6 characters');
+                  return;
+                }
+                handleAuthAction();
+              }}
+              disabled={loading || checkingUsername}
               activeOpacity={0.8}
             >
               <View>
@@ -369,14 +377,9 @@ export default function ConnectWalletScreen({
           {renderPulseRing(ring2, 180)}
           {renderPulseRing(ring3, 180)}
           <Animated.View style={[styles.logoContainer, { transform: [{ scale: logoScale }] }]}>
-            <TouchableOpacity
-              onPress={handleLogoPress}
-              activeOpacity={0.9}
-            >
-              <View>
-                <Text style={styles.logoText}>SR</Text>
-              </View>
-            </TouchableOpacity>
+            <View>
+              <Text style={styles.logoText}>SR</Text>
+            </View>
           </Animated.View>
         </View>
 
@@ -430,16 +433,6 @@ export default function ConnectWalletScreen({
           {error && (
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>{error}</Text>
-              
-              {/* Show Dev Connect explicitly if MWA is the issue */}
-              {__DEV__ && (error.includes('MWA not available') || error.includes('Firebase Auth') || devPressCount > 0) && (
-                <TouchableOpacity 
-                  style={styles.devBypassButton}
-                  onPress={onDevConnect}
-                >
-                  <Text style={styles.devBypassText}>BYPASS WITH DEV WALLET 🛠️</Text>
-                </TouchableOpacity>
-              )}
             </View>
           )}
 
@@ -602,21 +595,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
-  devBypassButton: {
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: borderRadius.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  devBypassText: {
-    fontSize: fontSize.xs,
-    color: colors.text,
-    fontWeight: fontWeight.bold,
-    textAlign: 'center',
-  },
 
   // Security note
   securityNote: {
@@ -773,7 +751,10 @@ const styles = StyleSheet.create({
   createButton: {
     width: '100%',
     borderRadius: borderRadius.lg,
-    overflow: 'hidden',
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
     elevation: 12,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 6 },
@@ -781,6 +762,7 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
   },
   createButtonDisabled: {
+    backgroundColor: colors.bgElevated,
     elevation: 0,
     shadowOpacity: 0,
   },

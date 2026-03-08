@@ -50,7 +50,6 @@ export interface Match {
   wagerLamports: number;
   wagerAmount?: number;
   wagerType?: 'sol' | 'skr';
-  escrowAddress?: string;
   status: MatchStatus;
   winnerId?: string;
   createdAt: number;
@@ -60,6 +59,7 @@ export interface Match {
 
 export interface MatchPlayer {
   id: string;
+  walletAddress?: string;
   username: string;
   rating: number;
   answers: PlayerAnswer[];

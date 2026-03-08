@@ -1,6 +1,6 @@
 import { supabase } from '../../config/supabase';
 import { Question, Match, MatchPlayer, PlayerAnswer } from '../../types';
-import { QUESTIONS_PER_MATCH } from '../../config/constants';
+import { QUESTIONS_PER_MATCH, SOL_WAGER_LAMPORTS, SKR_WAGER_BASE_UNITS } from '../../config/constants';
 import { generateGenericQuestions } from '../ai/questionGenerator';
 
 // ──────────────────────────────────────────────────────────
@@ -62,6 +62,7 @@ interface QueueCallbacks {
  */
 export async function joinQueue(
   playerId: string,
+  walletAddress: string,
   username: string,
   rating: number,
   wagerType: 'sol' | 'skr',
@@ -84,8 +85,13 @@ export async function joinQueue(
     // We found an opponent! We (the listener) create the match.
     try {
       const match = await createLiveMatch(
-        { id: playerId, username, rating },
-        { id: opponent.playerId, username: opponent.username, rating: opponent.rating },
+        { id: playerId, walletAddress, username, rating },
+        {
+          id: opponent.playerId,
+          walletAddress: opponent.walletAddress,
+          username: opponent.username,
+          rating: opponent.rating,
+        },
         wagerType
       );
 
@@ -131,7 +137,7 @@ export async function joinQueue(
   await queueChannel.send({
     type: 'broadcast',
     event: 'seeking',
-    payload: { playerId, username, rating },
+    payload: { playerId, walletAddress, username, rating },
   });
 
   console.log(`[Queue] ${username} joined ${channelName}`);
@@ -251,8 +257,8 @@ export function leaveMatchChannel(): void {
 // ──────────────────────────────────────────────────────────
 
 async function createLiveMatch(
-  playerAData: { id: string; username: string; rating: number },
-  playerBData: { id: string; username: string; rating: number },
+  playerAData: { id: string; walletAddress?: string; username: string; rating: number },
+  playerBData: { id: string; walletAddress?: string; username: string; rating: number },
   wagerType: 'sol' | 'skr'
 ): Promise<Match> {
   const now = Date.now();
@@ -273,6 +279,7 @@ async function createLiveMatch(
 
   const playerA: MatchPlayer = {
     id: playerAData.id,
+    walletAddress: playerAData.walletAddress,
     username: playerAData.username,
     rating: playerAData.rating,
     answers: [],
@@ -282,6 +289,7 @@ async function createLiveMatch(
 
   const playerB: MatchPlayer = {
     id: playerBData.id,
+    walletAddress: playerBData.walletAddress,
     username: playerBData.username,
     rating: playerBData.rating,
     answers: [],
@@ -295,11 +303,11 @@ async function createLiveMatch(
     playerB,
     questions,
     currentQuestionIndex: 0,
-    wagerLamports: wagerType === 'sol' ? 50000000 : 0,
+    wagerLamports: wagerType === 'sol' ? SOL_WAGER_LAMPORTS : 0,
+    wagerAmount: wagerType === 'sol' ? SOL_WAGER_LAMPORTS : SKR_WAGER_BASE_UNITS,
     wagerType,
-    status: 'in_progress',
+    status: 'waiting_for_deposits',
     createdAt: now,
-    startedAt: now,
   };
 
   console.log(`[Match] Created: ${playerA.username} vs ${playerB.username}`);

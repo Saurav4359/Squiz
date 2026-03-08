@@ -1,14 +1,18 @@
 import { Connection, PublicKey, Transaction, clusterApiUrl, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { TurboModuleRegistry } from 'react-native';
+import { Platform } from 'react-native';
 import { HELIUS_RPC_URL, SKR_MINT_ADDRESS } from '../../config/constants';
 
 // Use expo-secure-store – always available in Expo Go
 import * as SecureStore from 'expo-secure-store';
 
-// ─── Check if MWA native module exists ───────────────────
+// ─── Check if MWA is available (Android only, via intent) ──
 function isMWAAvailable(): boolean {
+  // MWA uses Android intents, not TurboModules
+  // Available on Android when the MWA package is installed (dev client build)
+  if (Platform.OS !== 'android') return false;
   try {
-    return TurboModuleRegistry.get('SolanaMobileWalletAdapter') != null;
+    require('@solana-mobile/mobile-wallet-adapter-protocol-web3js');
+    return true;
   } catch {
     return false;
   }
@@ -91,10 +95,22 @@ export async function connectWallet(): Promise<WalletSession> {
       });
 
       const pubkeyBytes = auth.accounts[0].address;
-      const address =
-        typeof pubkeyBytes === 'string'
-          ? pubkeyBytes
-          : new PublicKey(pubkeyBytes).toBase58();
+      let address: string;
+      if (pubkeyBytes instanceof Uint8Array || Array.isArray(pubkeyBytes)) {
+        // Raw bytes — convert to base58
+        address = new PublicKey(pubkeyBytes).toBase58();
+      } else if (typeof pubkeyBytes === 'string') {
+        // Could be base64 or base58 — check for non-base58 chars (+, /, =)
+        if (/[+/=]/.test(pubkeyBytes)) {
+          // Base64 encoded — decode to bytes then to base58
+          const bytes = Uint8Array.from(atob(pubkeyBytes), c => c.charCodeAt(0));
+          address = new PublicKey(bytes).toBase58();
+        } else {
+          address = pubkeyBytes;
+        }
+      } else {
+        address = new PublicKey(pubkeyBytes).toBase58();
+      }
 
       return {
         address,
@@ -233,26 +249,4 @@ export async function signAndSendTransaction(
 export function shortenAddress(address: string, chars: number = 4): string {
   if (!address) return '';
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
-}
-
-// ─── Dev bypass for emulator testing ─────────────────────
-export async function devConnectWallet(): Promise<WalletSession> {
-  const fakeChars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-  const fakePubkey =
-    'Dev' +
-    Array.from({ length: 41 }, () =>
-      fakeChars[Math.floor(Math.random() * fakeChars.length)]
-    ).join('');
-
-  const session: WalletSession = {
-    address: fakePubkey.slice(0, 44),
-    label: 'Dev Wallet',
-    authToken: 'dev_token',
-  };
-
-  await storageSet(KEY_AUTH_TOKEN, session.authToken);
-  await storageSet(KEY_WALLET, session.address);
-  await storageSet(KEY_WALLET_LABEL, session.label);
-
-  return session;
 }

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { connectWallet, disconnectWallet, restoreSession, getSOLBalance, getSKRBalance, shortenAddress, devConnectWallet, WalletSession } from '../services/wallet/solanaWallet';
+import { connectWallet, disconnectWallet, restoreSession, getSOLBalance, getSKRBalance, shortenAddress, WalletSession } from '../services/wallet/solanaWallet';
 import { getSolanaWalletBalance } from '../services/explorer/solscan';
 import * as Linking from 'expo-linking';
 
@@ -19,7 +19,6 @@ export interface WalletState {
 
 export interface UseWalletReturn extends WalletState {
   connect: () => Promise<void>;
-  devConnect: () => Promise<void>;
   disconnect: () => Promise<void>;
   refreshBalance: () => Promise<void>;
 }
@@ -56,7 +55,9 @@ export function useWallet(): UseWalletReturn {
   const refreshBalance = useCallback(async () => {
     if (!address) return;
     try {
+      console.log('[useWallet] Fetching balance for address:', address);
       const sol = await getSolanaWalletBalance(address);
+      console.log('[useWallet] SOL balance result:', sol);
       const skr = await getSKRBalance(address);
       setBalance({ sol, skr });
     } catch (err) {
@@ -98,21 +99,6 @@ export function useWallet(): UseWalletReturn {
     }
   }, []);
 
-  // Dev connect (emulator bypass)
-  const devConnect = useCallback(async () => {
-    setConnecting(true);
-    setError(null);
-    try {
-      const session = await devConnectWallet();
-      setAddress(session.address);
-      setLabel(session.label);
-      setAuthToken(session.authToken);
-    } catch (err: any) {
-      setError('Dev connect failed');
-    } finally {
-      setConnecting(false);
-    }
-  }, []);
 
   // Disconnect
   const disconnect = useCallback(async () => {
@@ -133,7 +119,6 @@ export function useWallet(): UseWalletReturn {
     connected: !!address,
     error,
     connect,
-    devConnect,
     disconnect,
     refreshBalance,
   };
