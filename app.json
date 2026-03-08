@@ -31,7 +31,8 @@
     "plugins": [
       "expo-secure-store",
       "expo-notifications",
-      "expo-router"
+      "expo-router",
+      "expo-sharing"
     ],
     "extra": {
       "eas": {

@@ -116,6 +116,65 @@ export default function App() {
     };
   }, [authHook.player?.id]);
 
+  // Daily open streak sync: updates once when user opens app on a new calendar day.
+  useEffect(() => {
+    const player = authHook.player;
+    if (!player) return;
+
+    let cancelled = false;
+
+    const toDayStart = (ms: number) => {
+      const d = new Date(ms);
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    };
+
+    const syncDailyStreak = async () => {
+      const now = Date.now();
+      const todayStart = toDayStart(now);
+      const lastActive = Number(player.lastActiveAt || 0);
+      const lastActiveStart = lastActive > 0 ? toDayStart(lastActive) : 0;
+      const currentStreak = Number(player.currentStreak || 0);
+
+      // Safeguard: never keep streak at 0 or negative.
+      if (currentStreak <= 0) {
+        await updatePlayer(player.walletAddress, {
+          currentStreak: 1,
+          lastActiveAt: now,
+        });
+        if (!cancelled) {
+          await authHook.refreshPlayer();
+        }
+        return;
+      }
+
+      // Already opened today; no streak mutation needed.
+      if (lastActiveStart === todayStart) return;
+
+      const yesterdayStart = todayStart - 24 * 60 * 60 * 1000;
+      const nextStreak =
+        lastActiveStart === yesterdayStart
+          ? Math.max(1, currentStreak + 1)
+          : 1;
+
+      await updatePlayer(player.walletAddress, {
+        currentStreak: nextStreak,
+        lastActiveAt: now,
+      });
+
+      if (!cancelled) {
+        await authHook.refreshPlayer();
+      }
+    };
+
+    syncDailyStreak().catch((err) => {
+      console.warn('[App] Daily streak sync failed:', err);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authHook.player?.id, authHook.player?.lastActiveAt]);
+
   // App ready
   useEffect(() => {
     const timer = setTimeout(() => setAppReady(true), 500);
