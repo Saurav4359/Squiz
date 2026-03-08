@@ -31,7 +31,7 @@ import {
 } from './src/services/matchmaking/liveMatchmaking';
 import type { MatchResult } from './src/services/matchmaking/liveMatchmaking';
 import { initializeEscrow, depositToEscrow, getEscrowStatus } from './src/services/wallet/escrow';
-import { startPresenceHeartbeat, stopPresenceHeartbeat } from './src/services/matchmaking/appPresence';
+import { joinLivePresence, leaveLivePresence } from './src/services/matchmaking/livePresence';
 
 // ─── Screen Type ─────────────────────────────────────────
 type Screen =
@@ -99,19 +99,19 @@ export default function App() {
     const playerId = authHook.player?.id;
     if (!playerId) return;
 
-    startPresenceHeartbeat(playerId);
+    joinLivePresence(playerId);
 
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        startPresenceHeartbeat(playerId);
+        joinLivePresence(playerId);
       } else {
-        stopPresenceHeartbeat(playerId);
+        leaveLivePresence();
       }
     });
 
     return () => {
       subscription.remove();
-      stopPresenceHeartbeat(playerId);
+      leaveLivePresence();
     };
   }, [authHook.player?.id]);
 

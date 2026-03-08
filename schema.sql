@@ -55,21 +55,14 @@ CREATE TABLE IF NOT EXISTS match_queue (
     joined_at BIGINT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS app_presence (
-    player_id TEXT PRIMARY KEY,
-    last_seen BIGINT NOT NULL
-);
-
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_players_wallet ON players(wallet_address);
 CREATE INDEX IF NOT EXISTS idx_players_rating ON players(rating DESC);
 CREATE INDEX IF NOT EXISTS idx_matches_ended ON matches(ended_at DESC);
 CREATE INDEX IF NOT EXISTS idx_match_queue_wager ON match_queue(wager_type);
-CREATE INDEX IF NOT EXISTS idx_app_presence_last_seen ON app_presence(last_seen DESC);
 
--- RLS for client-side queue/presence writes
+-- RLS for client-side queue writes
 ALTER TABLE IF EXISTS match_queue ENABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS app_presence ENABLE ROW LEVEL SECURITY;
 
 DO $$
 BEGIN
@@ -108,46 +101,6 @@ BEGIN
         WHERE schemaname = 'public' AND tablename = 'match_queue' AND policyname = 'match_queue_delete_all'
     ) THEN
         CREATE POLICY match_queue_delete_all ON match_queue FOR DELETE USING (true);
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies
-        WHERE schemaname = 'public' AND tablename = 'app_presence' AND policyname = 'app_presence_select_all'
-    ) THEN
-        CREATE POLICY app_presence_select_all ON app_presence FOR SELECT USING (true);
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies
-        WHERE schemaname = 'public' AND tablename = 'app_presence' AND policyname = 'app_presence_insert_all'
-    ) THEN
-        CREATE POLICY app_presence_insert_all ON app_presence FOR INSERT WITH CHECK (true);
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies
-        WHERE schemaname = 'public' AND tablename = 'app_presence' AND policyname = 'app_presence_update_all'
-    ) THEN
-        CREATE POLICY app_presence_update_all ON app_presence FOR UPDATE USING (true) WITH CHECK (true);
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies
-        WHERE schemaname = 'public' AND tablename = 'app_presence' AND policyname = 'app_presence_delete_all'
-    ) THEN
-        CREATE POLICY app_presence_delete_all ON app_presence FOR DELETE USING (true);
     END IF;
 END $$;
 

@@ -12,6 +12,7 @@ import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/t
 import { Player, DailyQuest } from '../types';
 import { getRankTitle, getRankColor, calculateLevel, getXPForNextLevel } from '../services/matchmaking/ratingSystem';
 import { getMatchStats } from '../services/matchmaking/matchStats';
+import { subscribeActivePlayers } from '../services/matchmaking/livePresence';
 
 interface HomeScreenProps {
   player: Player;
@@ -33,7 +34,9 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
 
     const fetchStats = async () => {
       const nextStats = await getMatchStats();
-      if (mounted) setStats(nextStats);
+      if (mounted) {
+        setStats((prev) => ({ ...prev, sol: nextStats.sol, skr: nextStats.skr }));
+      }
     };
 
     fetchStats();
@@ -43,6 +46,13 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
       mounted = false;
       clearInterval(interval);
     };
+  }, []);
+
+  useEffect(() => {
+    const unsub = subscribeActivePlayers((count) => {
+      setStats((prev) => ({ ...prev, active: count }));
+    });
+    return unsub;
   }, []);
 
   return (
