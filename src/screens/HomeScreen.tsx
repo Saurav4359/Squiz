@@ -101,7 +101,7 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
             </View>
             <Text style={styles.xpText}>{xpProgress.current} / {xpProgress.required} XP • Level {level}</Text>
 
-            <View style={styles.statsContainer}>
+            <View style={[styles.statsContainer, styles.statsCompact]}>
               <View style={styles.statBadge}>
                 <Ionicons name="people-outline" size={18} color="#22C55E" />
                 <Text style={styles.statText} numberOfLines={1}>{stats.active} Active Users</Text>
@@ -111,7 +111,6 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
                 <Text style={styles.statText} numberOfLines={1}>{stats.sol} SOL Matchmakers</Text>
               </View>
               <View style={styles.statBadge}>
-                <Ionicons name="diamond-outline" size={18} color="#60A5FA" />
                 <Text style={styles.statText} numberOfLines={1}>{stats.skr} SKR Matchmakers</Text>
               </View>
             </View>
@@ -278,7 +277,7 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     flexDirection: 'column',
-    marginTop: 10,
+    marginTop: 4,
   },
   statBadge: {
     width: '100%',
@@ -287,7 +286,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 6,
     paddingHorizontal: 8,
-    marginBottom: 6,
+    marginBottom: 4,
     backgroundColor: '#101014',
     borderRadius: 16,
     borderWidth: 1,
