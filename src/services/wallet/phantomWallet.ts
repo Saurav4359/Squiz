@@ -6,7 +6,7 @@ import { PublicKey } from '@solana/web3.js';
 import * as SecureStore from 'expo-secure-store';
 import { WalletSession } from './solanaWallet';
 
-const CLUSTER = 'devnet';
+const CLUSTER = 'mainnet-beta';
 const STORAGE_PREFIX = 'squiz_phantom_';
 const APP_URL = 'https://squiz.app';
 

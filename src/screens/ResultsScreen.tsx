@@ -105,7 +105,7 @@ export default function ResultsScreen({
   const isSolWager = match.wagerType === 'sol' || !match.wagerType;
 
   const openExplorer = (txSig: string) => {
-    Linking.openURL(`https://explorer.solana.com/tx/${txSig}?cluster=devnet`);
+    Linking.openURL(`https://explorer.solana.com/tx/${txSig}`);
   };
 
   return (

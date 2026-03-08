@@ -24,7 +24,7 @@ function isMWAAvailable(): boolean {
 }
 
 // ─── Connection ──────────────────────────────────────────
-const CLUSTER = 'devnet';
+const CLUSTER = 'mainnet-beta';
 const RPC_ENDPOINT = HELIUS_RPC_URL || clusterApiUrl(CLUSTER);
 
 let _connection: Connection | null = null;

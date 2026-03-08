@@ -25,7 +25,7 @@ import { resolve } from 'path';
 
 // ─── Configuration ────────────────────────────────────────
 const PORT = Number(process.env.PORT) || 3001;
-const RPC_URL = process.env.RPC_URL || 'https://api.devnet.solana.com';
+const RPC_URL = process.env.RPC_URL || 'https://api.mainnet-beta.solana.com';
 const HOUSE_CUT_BPS = Number(process.env.HOUSE_CUT_BPS) || 200; // 2% = 200 basis points
 
 // ─── Load Treasury Keypair ────────────────────────────────

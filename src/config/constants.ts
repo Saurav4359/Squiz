@@ -1,6 +1,6 @@
 // API Keys (use env vars in production)
 export const GROQ_API_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY || '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';
-export const HELIUS_RPC_URL = process.env.EXPO_PUBLIC_HELIUS_RPC_URL || 'https://devnet.helius-rpc.com/?api-key=8cb5e526-7ec0-4290-8943-13f9442457f2';
+export const HELIUS_RPC_URL = process.env.EXPO_PUBLIC_HELIUS_RPC_URL || 'https://mainnet.helius-rpc.com/?api-key=8cb5e526-7ec0-4290-8943-13f9442457f2';
 
 // News & Data Source API Keys
 export const TAVILY_API_KEY = process.env.EXPO_PUBLIC_TAVILY_API_KEY || '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';
