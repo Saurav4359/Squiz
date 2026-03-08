@@ -19,16 +19,13 @@ interface HomeScreenProps {
   onFindMatch: (wagerType: 'sol' | 'skr') => void;
   onNavigate: (screen: string) => void;
   dailyQuests: DailyQuest[];
-  walletBalance: { sol: number; skr: number };
 }
 
-export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuests, walletBalance }: HomeScreenProps) {
+export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuests }: HomeScreenProps) {
   const rating = player.rating || 1200;
   const rankTitle = getRankTitle(rating);
   const level = calculateLevel(player.xp);
   const xpProgress = getXPForNextLevel(player.xp);
-  const solBalance = walletBalance?.sol ?? 0;
-  const skrBalance = walletBalance?.skr ?? 0;
   const [stats, setStats] = useState({ active: 0, sol: 0, skr: 0 });
 
   useEffect(() => {
@@ -61,17 +58,6 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.balanceRow}>
-          <View style={styles.balanceCard}>
-            <Text style={styles.balanceLabel}>SOL BALANCE</Text>
-            <Text style={styles.balanceValue}>◎ {solBalance.toFixed(3)}</Text>
-          </View>
-          <View style={styles.balanceCard}>
-            <Text style={styles.balanceLabel}>SKR BALANCE</Text>
-            <Text style={[styles.balanceValue, styles.balanceAccent]}>💎 {skrBalance.toFixed(2)}</Text>
-          </View>
-        </View>
-
         <View style={styles.playerCardWrap}>
           <View style={styles.playerCardGlow} />
           <View style={styles.playerCard}>
@@ -101,7 +87,7 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
             </View>
             <Text style={styles.xpText}>{xpProgress.current} / {xpProgress.required} XP • Level {level}</Text>
 
-            <View style={[styles.statsContainer, styles.statsCompact]}>
+            <View style={styles.statsContainer}>
               <View style={styles.statBadge}>
                 <Ionicons name="people-outline" size={18} color="#22C55E" />
                 <Text style={styles.statText} numberOfLines={1}>{stats.active} Active Users</Text>
@@ -111,6 +97,7 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
                 <Text style={styles.statText} numberOfLines={1}>{stats.sol} SOL Matchmakers</Text>
               </View>
               <View style={styles.statBadge}>
+                <Ionicons name="diamond-outline" size={18} color="#60A5FA" />
                 <Text style={styles.statText} numberOfLines={1}>{stats.skr} SKR Matchmakers</Text>
               </View>
             </View>
@@ -171,37 +158,6 @@ const cardBase = {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   scrollView: { flex: 1, paddingHorizontal: spacing.md },
-  balanceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: spacing.xl,
-    marginBottom: spacing.md,
-  },
-  balanceCard: {
-    flex: 1,
-    marginHorizontal: spacing.xs,
-    backgroundColor: colors.bgCard,
-    borderRadius: 16,
-    padding: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  balanceLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    letterSpacing: 1,
-    marginBottom: spacing.xs,
-  },
-  balanceValue: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  balanceAccent: {
-    color: colors.primary,
-  },
   playerCardWrap: { marginTop: spacing.xxl, marginBottom: spacing.sm, position: 'relative' },
   playerCardGlow: {
     position: 'absolute',
@@ -277,7 +233,7 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     flexDirection: 'column',
-    marginTop: 4,
+    marginTop: 10,
   },
   statBadge: {
     width: '100%',
@@ -286,7 +242,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 6,
     paddingHorizontal: 8,
-    marginBottom: 4,
+    marginBottom: 6,
     backgroundColor: '#101014',
     borderRadius: 16,
     borderWidth: 1,
