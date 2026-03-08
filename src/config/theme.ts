@@ -1,51 +1,36 @@
 export const colors = {
-  // Backgrounds
-  bg: '#0A0A1A',
-  bgCard: 'rgba(255, 255, 255, 0.05)',
-  bgCardHover: 'rgba(255, 255, 255, 0.08)',
-  bgElevated: '#121228',
-  bgModal: 'rgba(0, 0, 0, 0.85)',
+  bg: '#0B0B0F',
+  bgCard: '#18181B',
+  bgSecondary: '#101014',
 
-  // Primary - Neon Green (win, success, CTA)
-  primary: '#00F5A0',
-  primaryDim: 'rgba(0, 245, 160, 0.15)',
-  primaryGlow: 'rgba(0, 245, 160, 0.3)',
+  primary: '#D0FF80',
+  accent: '#C7B1F0',
 
-  // Secondary - Cyan (info, ratings)
-  secondary: '#00D9FF',
-  secondaryDim: 'rgba(0, 217, 255, 0.15)',
-
-  // Danger - Red (loss, timer warning)
-  danger: '#FF4757',
-  dangerDim: 'rgba(255, 71, 87, 0.15)',
-
-  // Warning - Orange
-  warning: '#FFA502',
-  warningDim: 'rgba(255, 165, 2, 0.15)',
-
-  // Gold (ranks, badges, special)
-  gold: '#FFD700',
-  goldDim: 'rgba(255, 215, 0, 0.15)',
-
-  // Purple (SKR, premium)
-  purple: '#A855F7',
-  purpleDim: 'rgba(168, 85, 247, 0.15)',
-
-  // Text
   text: '#FFFFFF',
-  textSecondary: '#8B8B9E',
-  textDim: '#5A5A6E',
+  textSecondary: '#9CA3AF',
 
-  // Borders
-  border: 'rgba(255, 255, 255, 0.08)',
-  borderLight: 'rgba(255, 255, 255, 0.15)',
+  border: '#27272A',
 
-  // Gradients
-  gradientPrimary: ['#00F5A0', '#00D9FF'] as const,
-  gradientDanger: ['#FF4757', '#FF6B81'] as const,
-  gradientGold: ['#FFD700', '#FFA502'] as const,
-  gradientPurple: ['#A855F7', '#6366F1'] as const,
-  gradientBg: ['#0A0A1A', '#1A1A3E'] as const,
+  success: '#22C55E',
+  danger: '#EF4444',
+
+  // Compatibility tokens for existing styles
+  bgElevated: '#101014',
+  bgCardHover: '#1E1E24',
+  bgModal: 'rgba(0, 0, 0, 0.85)',
+  primaryDim: 'rgba(208, 255, 128, 0.16)',
+  primaryGlow: 'rgba(208, 255, 128, 0.35)',
+  secondary: '#9CA3AF',
+  secondaryDim: 'rgba(156, 163, 175, 0.2)',
+  textDim: '#9CA3AF',
+  borderLight: '#3F3F46',
+  dangerDim: 'rgba(239, 68, 68, 0.16)',
+  warning: '#F59E0B',
+  warningDim: 'rgba(245, 158, 11, 0.16)',
+  gold: '#D0FF80',
+  goldDim: 'rgba(208, 255, 128, 0.16)',
+  purple: '#C7B1F0',
+  purpleDim: 'rgba(199, 177, 240, 0.15)',
 };
 
 export const spacing = {
@@ -60,23 +45,23 @@ export const spacing = {
 };
 
 export const borderRadius = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
+  sm: 18,
+  md: 18,
+  lg: 18,
+  xl: 18,
   full: 999,
 };
 
 export const fontSize = {
-  xs: 10,
-  sm: 12,
+  xs: 14,
+  sm: 14,
   md: 14,
-  lg: 16,
+  lg: 14,
   xl: 18,
-  xxl: 22,
-  xxxl: 28,
-  display: 36,
-  hero: 48,
+  xxl: 18,
+  xxxl: 18,
+  display: 24,
+  hero: 24,
 };
 
 export const fontWeight = {

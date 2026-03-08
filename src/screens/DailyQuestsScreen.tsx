@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
 import { DailyQuest } from '../types';
 
@@ -33,12 +32,7 @@ export default function DailyQuestsScreen({ quests, onNavigate }: DailyQuestsScr
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Progress Overview */}
         <View style={styles.overviewCard}>
-          <LinearGradient
-            colors={allDone ? colors.gradientPrimary : ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.03)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.overviewGradient}
-          >
+          <View>
             {allDone ? (
               <>
                 <Text style={styles.allDoneEmoji}>🎉</Text>
@@ -61,7 +55,7 @@ export default function DailyQuestsScreen({ quests, onNavigate }: DailyQuestsScr
                 </Text>
               </>
             )}
-          </LinearGradient>
+          </View>
         </View>
 
         {/* Quest List */}
@@ -118,14 +112,9 @@ export default function DailyQuestsScreen({ quests, onNavigate }: DailyQuestsScr
             onPress={() => onNavigate('home')}
             activeOpacity={0.8}
           >
-            <LinearGradient
-              colors={colors.gradientPrimary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.findMatchGradient}
-            >
+            <View>
               <Text style={styles.findMatchText}>PLAY TO COMPLETE QUESTS</Text>
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
         )}
 

@@ -14,7 +14,6 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
 import { checkUsernameUnique } from '../services/db/database';
 
@@ -201,14 +200,9 @@ export default function ConnectWalletScreen({
           {renderPulseRing(ring2, 180)}
           {renderPulseRing(ring3, 180)}
           <View style={styles.logoContainer}>
-            <LinearGradient
-              colors={colors.gradientPrimary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.logoGradient}
-            >
+            <View>
               <ActivityIndicator color={colors.bg} size="large" />
-            </LinearGradient>
+            </View>
           </View>
         </View>
         <View style={styles.textArea}>
@@ -345,16 +339,7 @@ export default function ConnectWalletScreen({
               disabled={username.trim().length < 3 || password.trim().length < 6 || loading || checkingUsername}
               activeOpacity={0.8}
             >
-              <LinearGradient
-                colors={
-                  username.trim().length >= 3 && password.trim().length >= 6
-                    ? colors.gradientPrimary
-                    : (['#333', '#333'] as const)
-                }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.createButtonGradient}
-              >
+              <View>
                 {loading || checkingUsername ? (
                   <ActivityIndicator color={colors.bg} size="small" />
                 ) : (
@@ -362,7 +347,7 @@ export default function ConnectWalletScreen({
                     {isLoginMode ? 'LOGIN' : 'ENTER THE ARENA'}
                   </Text>
                 )}
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </Animated.View>
         </ScrollView>
@@ -387,14 +372,9 @@ export default function ConnectWalletScreen({
               onPress={handleLogoPress}
               activeOpacity={0.9}
             >
-              <LinearGradient
-                colors={colors.gradientPrimary}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.logoGradient}
-              >
+              <View>
                 <Text style={styles.logoText}>SR</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </Animated.View>
         </View>
@@ -425,12 +405,7 @@ export default function ConnectWalletScreen({
             disabled={connecting}
             activeOpacity={0.8}
           >
-            <LinearGradient
-              colors={colors.gradientPrimary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.connectGradient}
-            >
+            <View>
               {connecting ? (
                 <ActivityIndicator color={colors.bg} size="small" />
               ) : (
@@ -439,7 +414,7 @@ export default function ConnectWalletScreen({
                   <Text style={styles.connectText}>CONNECT WALLET</Text>
                 </>
               )}
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
 
           <Text style={styles.walletHint}>

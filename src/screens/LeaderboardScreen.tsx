@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
 import { LeaderboardEntry } from '../types';
 import { getRankTitle, getRankColor } from '../services/matchmaking/ratingSystem';
@@ -80,12 +79,12 @@ export default function LeaderboardScreen({
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={[colors.primary, colors.bg]} style={styles.headerGradient}>
+      <View>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Seeker Ranks</Text>
           <Text style={styles.headerSub}>Compete for the ultimate title</Text>
         </View>
-      </LinearGradient>
+      </View>
 
       {/* Control Panel */}
       <View style={styles.controlPanel}>

@@ -7,8 +7,7 @@ import {
   ScrollView,
   StatusBar,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
+import { colors, spacing, borderRadius } from '../config/theme';
 import { Player, DailyQuest } from '../types';
 import { getRankTitle, getRankColor, calculateLevel, getXPForNextLevel } from '../services/matchmaking/ratingSystem';
 import { getMatchStats } from '../services/matchmaking/matchStats';
@@ -59,121 +58,48 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
-              <Text style={styles.avatarText}>
-                {player.username.charAt(0).toUpperCase()}
-              </Text>
+              <Text style={styles.avatarText}>{player.username.charAt(0).toUpperCase()}</Text>
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.username}>{player.username}</Text>
+              <Text style={styles.screenTitle}>{player.username}</Text>
               <View style={styles.ratingRow}>
-                <Text style={[styles.rankTitle, { color: rankColor }]}>
-                  {rankTitle}
-                </Text>
-                <Text style={styles.ratingText}>{rating}</Text>
+                <Text style={[styles.bodyText, { color: rankColor }]}>{rankTitle}</Text>
+                <Text style={styles.cardTitle}>{rating}</Text>
               </View>
             </View>
           </View>
 
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{player.matchesPlayed}</Text>
-              <Text style={styles.statLabel}>Matches</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>
-                {player.matchesPlayed > 0
-                  ? Math.round((player.matchesWon / player.matchesPlayed) * 100)
-                  : 0}%
-              </Text>
-              <Text style={styles.statLabel}>Win Rate</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>🔥 {player.currentStreak}</Text>
-              <Text style={styles.statLabel}>Streak</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>Lv.{level}</Text>
-              <Text style={styles.statLabel}>Level</Text>
-            </View>
+          <View style={styles.xpBarBg}>
+            <View style={[styles.xpBarFill, { width: `${xpProgress.progress * 100}%` }]} />
           </View>
+          <Text style={styles.bodyText}>{xpProgress.current} / {xpProgress.required} XP • Level {level}</Text>
 
-          {/* XP Progress Bar */}
-          <View style={styles.xpBarContainer}>
-            <View style={styles.xpBarBg}>
-              <LinearGradient
-                colors={colors.gradientPrimary}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={[styles.xpBarFill, { width: `${xpProgress.progress * 100}%` }]}
-              />
-            </View>
-            <Text style={styles.xpText}>
-              {xpProgress.current} / {xpProgress.required} XP
-            </Text>
+          <View style={styles.statsBar}>
+            <View style={styles.statCard}><Text style={styles.bodyText}>🟢 {stats.active} Online</Text></View>
+            <View style={styles.statCard}><Text style={styles.bodyText}>⚡ {stats.sol} SOL Battles</Text></View>
+            <View style={styles.statCard}><Text style={styles.bodyText}>💎 {stats.skr} SKR Battles</Text></View>
           </View>
-
-          {player.isSkrStaker && (
-            <View style={styles.skrBadge}>
-              <Text style={styles.skrBadgeText}>💎 SKR Staker • 1.5x XP</Text>
-            </View>
-          )}
         </View>
 
-        <View style={styles.liveStatsBar}>
-          <Text style={styles.liveStatsText}>Active Players: {stats.active}</Text>
-          <Text style={styles.liveStatsText}>SOL Matching: {stats.sol}</Text>
-          <Text style={styles.liveStatsText}>SKR Matching: {stats.skr}</Text>
-        </View>
-
-        {/* Find Match Button */}
-        <TouchableOpacity
-          style={styles.findMatchButton}
-          onPress={() => onFindMatch('sol')}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={colors.gradientPrimary}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.findMatchGradient}
-          >
-            <Text style={styles.findMatchIcon}>⚔️</Text>
-            <Text style={styles.findMatchText}>FIND MATCH</Text>
-            <Text style={styles.findMatchSub}>0.05 SOL wager</Text>
-          </LinearGradient>
+        <TouchableOpacity style={styles.findMatchButton} onPress={() => onFindMatch('sol')} activeOpacity={0.85}>
+          <Text style={styles.findMatchText}>FIND MATCH</Text>
+          <Text style={styles.findMatchSub}>0.05 SOL wager</Text>
         </TouchableOpacity>
 
-        {/* SKR Tournament Button */}
-        <TouchableOpacity
-          style={styles.skrMatchButton}
-          onPress={() => onFindMatch('skr')}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.skrMatchIcon}>💎</Text>
-          <Text style={styles.skrMatchText}>SKR TOURNAMENT</Text>
-          <Text style={styles.skrMatchSub}>100 SKR wager • 1.5x XP</Text>
+        <TouchableOpacity style={styles.secondaryButton} onPress={() => onFindMatch('skr')} activeOpacity={0.85}>
+          <Text style={styles.secondaryButtonTitle}>SKR TOURNAMENT</Text>
+          <Text style={styles.bodyText}>100 SKR wager • 1.5x XP</Text>
         </TouchableOpacity>
 
-        {/* Daily Quests */}
-        <Text style={styles.sectionTitle}>📋 DAILY QUESTS</Text>
+        <Text style={styles.screenTitle}>Daily Quests</Text>
         {dailyQuests.map((quest) => (
           <View key={quest.id} style={styles.questCard}>
             <View style={styles.questHeader}>
-              <Text style={styles.questIcon}>{quest.icon}</Text>
-              <View style={styles.questInfo}>
-                <Text style={styles.questTitle}>{quest.title}</Text>
-                <Text style={styles.questReward}>+{quest.xpReward} XP</Text>
-              </View>
-              {quest.isCompleted && (
-                <Text style={styles.questComplete}>✅</Text>
-              )}
+              <Text style={styles.cardTitle}>{quest.title}</Text>
+              <Text style={styles.bodyText}>+{quest.xpReward} XP</Text>
             </View>
             <View style={styles.questProgressBg}>
               <View
@@ -181,346 +107,96 @@ export default function HomeScreen({ player, onFindMatch, onNavigate, dailyQuest
                   styles.questProgressFill,
                   {
                     width: `${(quest.progress / quest.target) * 100}%`,
-                    backgroundColor: quest.isCompleted
-                      ? colors.primary
-                      : colors.secondary,
+                    backgroundColor: quest.isCompleted ? colors.success : colors.primary,
                   },
                 ]}
               />
             </View>
-            <Text style={styles.questProgressText}>
-              {quest.progress}/{quest.target}
-            </Text>
+            <Text style={styles.bodyText}>{quest.progress}/{quest.target}</Text>
           </View>
         ))}
+
         <View style={{ height: 100 }} />
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  scrollView: {
-    flex: 1,
-    paddingHorizontal: spacing.lg,
-  },
+const cardBase = {
+  backgroundColor: colors.bgCard,
+  borderRadius: 18,
+  padding: 20,
+  borderWidth: 1,
+  borderColor: colors.border,
+  shadowColor: '#000',
+  shadowOpacity: 0.3,
+  shadowRadius: 20,
+  shadowOffset: { width: 0, height: 10 },
+  elevation: 6,
+} as const;
 
-  // Profile Card
-  profileCard: {
-    backgroundColor: colors.bgCard,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
-    marginTop: spacing.xxl + 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  profileHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg },
+  scrollView: { flex: 1, paddingHorizontal: spacing.lg },
+  profileCard: { ...cardBase, marginTop: spacing.xxl + 20, marginBottom: spacing.md },
+  profileHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
   avatarContainer: {
     width: 56,
     height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primaryDim,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.bgSecondary,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.primary,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  avatarText: {
-    fontSize: fontSize.xxl,
-    fontWeight: fontWeight.bold,
-    color: colors.primary,
-  },
-  profileInfo: {
-    marginLeft: spacing.lg,
-    flex: 1,
-  },
-  username: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.xs,
-  },
-  rankTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-    marginRight: spacing.sm,
-  },
-  ratingText: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-  },
-
-  // Stats Row
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-  },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statValue: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
-  },
-  statLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: colors.border,
-  },
-
-  // XP Bar
-  xpBarContainer: {
-    marginBottom: spacing.sm,
-  },
+  avatarText: { fontSize: 24, fontWeight: '700', color: colors.text },
+  profileInfo: { marginLeft: spacing.md, flex: 1 },
+  screenTitle: { fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: spacing.md },
+  cardTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
+  bodyText: { fontSize: 14, color: colors.textSecondary },
+  ratingRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
   xpBarBg: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.bgElevated,
+    height: 8,
+    borderRadius: 18,
+    backgroundColor: colors.bgSecondary,
     overflow: 'hidden',
+    marginBottom: spacing.sm,
   },
-  xpBarFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  xpText: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    textAlign: 'right',
-  },
-
-  // SKR Badge
-  skrBadge: {
-    backgroundColor: colors.purpleDim,
-    borderRadius: borderRadius.sm,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    alignSelf: 'flex-start',
-    marginTop: spacing.sm,
-  },
-  skrBadgeText: {
-    fontSize: fontSize.xs,
-    color: colors.purple,
-    fontWeight: fontWeight.semibold,
-  },
-
-  // Section Title
-  sectionTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold,
-    color: colors.textSecondary,
-    marginTop: spacing.xxl,
-    marginBottom: spacing.md,
-    letterSpacing: 1,
-  },
-
-  // Role Selector
-  roleScroll: {
-    marginBottom: spacing.lg,
-  },
-  roleChip: {
-    backgroundColor: colors.bgCard,
-    borderRadius: borderRadius.full,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    marginRight: spacing.sm,
+  xpBarFill: { height: '100%', backgroundColor: colors.primary },
+  statsBar: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 18,
+    padding: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
-    flexDirection: 'row',
     alignItems: 'center',
   },
-  roleChipActive: {
-    backgroundColor: colors.primaryDim,
-    borderColor: colors.primary,
-  },
-  roleChipText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    fontWeight: fontWeight.medium,
-  },
-  roleChipTextActive: {
-    color: colors.primary,
-    fontWeight: fontWeight.bold,
-  },
-  roleRating: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    marginLeft: spacing.sm,
-    fontWeight: fontWeight.bold,
-  },
-
-  // Find Match Button
-  liveStatsBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.bgCard,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
-  },
-  liveStatsText: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    fontWeight: fontWeight.semibold,
-  },
-
   findMatchButton: {
-    marginBottom: spacing.md,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    elevation: 8,
+    backgroundColor: colors.primary,
+    borderRadius: 22,
+    paddingVertical: 20,
+    alignItems: 'center',
     shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowOpacity: 0.7,
+    shadowRadius: 25,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+    marginBottom: spacing.md,
   },
-  findMatchGradient: {
-    paddingVertical: spacing.xxl,
-    alignItems: 'center',
-    borderRadius: borderRadius.lg,
-  },
-  findMatchIcon: {
-    fontSize: 36,
-    marginBottom: spacing.sm,
-  },
-  findMatchText: {
-    fontSize: fontSize.xxl,
-    fontWeight: fontWeight.extrabold,
-    color: colors.bg,
-    letterSpacing: 2,
-  },
-  findMatchSub: {
-    fontSize: fontSize.sm,
-    color: 'rgba(10, 10, 26, 0.6)',
-    marginTop: spacing.xs,
-  },
-
-  // SKR Match Button
-  skrMatchButton: {
-    backgroundColor: colors.purpleDim,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.xl,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.purple,
+  findMatchText: { color: '#000', fontSize: 20, fontWeight: '700' },
+  findMatchSub: { fontSize: 14, color: '#000', marginTop: 4 },
+  secondaryButton: {
+    ...cardBase,
+    borderColor: colors.accent,
     marginBottom: spacing.lg,
-  },
-  skrMatchIcon: {
-    fontSize: 24,
-    marginBottom: spacing.xs,
-  },
-  skrMatchText: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    color: colors.purple,
-    letterSpacing: 1,
-  },
-  skrMatchSub: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-
-  // Quest Cards
-  questCard: {
-    backgroundColor: colors.bgCard,
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  questHeader: {
-    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.sm,
   },
-  questIcon: {
-    fontSize: 20,
-    marginRight: spacing.md,
-  },
-  questInfo: {
-    flex: 1,
-  },
-  questTitle: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
-    color: colors.text,
-  },
-  questReward: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    marginTop: 2,
-  },
-  questComplete: {
-    fontSize: 18,
-  },
-  questProgressBg: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.bgElevated,
-    overflow: 'hidden',
-  },
-  questProgressFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  questProgressText: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    textAlign: 'right',
-  },
-
-  // Bottom Nav
-  bottomNav: {
-    flexDirection: 'row',
-    backgroundColor: colors.bgElevated,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingBottom: 20,
-    paddingTop: spacing.sm,
-  },
-  navItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.xs,
-  },
-  navIcon: {
-    fontSize: 20,
-    marginBottom: 2,
-  },
-  navLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-  },
-  navActive: {
-    color: colors.primary,
-  },
+  secondaryButtonTitle: { fontSize: 18, fontWeight: '600', color: colors.accent, marginBottom: 4 },
+  questCard: { ...cardBase, marginBottom: spacing.md },
+  questHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm, alignItems: 'center' },
+  questProgressBg: { height: 8, borderRadius: 18, backgroundColor: colors.bgSecondary, overflow: 'hidden', marginBottom: spacing.sm },
+  questProgressFill: { height: '100%', borderRadius: 18 },
 });

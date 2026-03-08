@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, AppState, BackHandler, PanResponder } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import ConnectWalletScreen from './src/screens/ConnectWalletScreen';
 import HomeScreen from './src/screens/HomeScreen';
@@ -900,42 +901,61 @@ export default function App() {
     const mainScreens = ['home', 'leaderboard', 'quests', 'history', 'profile'];
     if (!authHook.player || !mainScreens.includes(currentScreen)) return null;
 
+    const tabs: Array<{
+      key: Screen;
+      label: string;
+      icon: keyof typeof Ionicons.glyphMap;
+      onPress: () => void;
+      isActive: boolean;
+    }> = [
+      {
+        key: 'home',
+        label: 'Home',
+        icon: 'home-outline',
+        onPress: () => { setViewedPlayer(null); handleNavigate('home'); },
+        isActive: currentScreen === 'home',
+      },
+      {
+        key: 'leaderboard',
+        label: 'Ranks',
+        icon: 'trophy-outline',
+        onPress: () => { setViewedPlayer(null); handleNavigate('leaderboard'); },
+        isActive: currentScreen === 'leaderboard',
+      },
+      {
+        key: 'quests',
+        label: 'Quests',
+        icon: 'flash-outline',
+        onPress: () => { setViewedPlayer(null); handleNavigate('quests'); },
+        isActive: currentScreen === 'quests',
+      },
+      {
+        key: 'history',
+        label: 'History',
+        icon: 'time-outline',
+        onPress: () => { setViewedPlayer(null); handleNavigate('history'); },
+        isActive: currentScreen === 'history',
+      },
+      {
+        key: 'profile',
+        label: 'Profile',
+        icon: 'person-outline',
+        onPress: () => { setViewedPlayer(null); handleNavigate('profile'); },
+        isActive: currentScreen === 'profile' && !viewedPlayer,
+      },
+    ];
+
     return (
       <View style={styles.bottomNav}>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => { setViewedPlayer(null); handleNavigate('home'); }}
-        >
-          <Text style={[styles.navIcon, currentScreen === 'home' && styles.navActive]}>Home</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => { setViewedPlayer(null); handleNavigate('leaderboard'); }}
-        >
-          <Text style={[styles.navIcon, currentScreen === 'leaderboard' && styles.navActive]}>Ranks</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => { setViewedPlayer(null); handleNavigate('quests'); }}
-        >
-          <Text style={[styles.navIcon, currentScreen === 'quests' && styles.navActive]}>Quests</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => { setViewedPlayer(null); handleNavigate('history'); }}
-        >
-          <Text style={[styles.navIcon, currentScreen === 'history' && styles.navActive]}>History</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => { setViewedPlayer(null); handleNavigate('profile'); }}
-        >
-          <Text style={[styles.navIcon, (currentScreen === 'profile' && !viewedPlayer) && styles.navActive]}>Profile</Text>
-        </TouchableOpacity>
+        {tabs.map((tab) => {
+          const color = tab.isActive ? colors.primary : colors.textSecondary;
+          return (
+            <TouchableOpacity key={tab.key} style={styles.navItem} onPress={tab.onPress} activeOpacity={0.8}>
+              <Ionicons name={tab.icon} size={22} color={color} />
+              <Text style={[styles.navLabel, tab.isActive && styles.navActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     );
   };
@@ -956,27 +976,34 @@ const styles = StyleSheet.create({
   },
   bottomNav: {
     flexDirection: 'row',
-    backgroundColor: colors.bgElevated,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingBottom: 20,
-    paddingTop: spacing.sm,
+    backgroundColor: colors.bgCard,
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 80,
+    bottom: 20,
+    left: 16,
+    right: 16,
+    height: 62,
+    borderRadius: 32,
+    paddingTop: 6,
+    paddingBottom: 6,
+    borderTopWidth: 0,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
   },
   navItem: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: spacing.xs,
+    justifyContent: 'center',
+    paddingVertical: 3,
+    borderRadius: 20,
   },
-  navIcon: {
+  navLabel: {
     fontSize: 12,
-    marginBottom: 2,
+    marginTop: 3,
     color: colors.textSecondary,
-    fontWeight: fontWeight.medium,
+    fontWeight: '600',
   },
   navActive: {
     color: colors.primary,

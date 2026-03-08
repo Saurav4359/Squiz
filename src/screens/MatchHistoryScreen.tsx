@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
 import { Match } from '../types';
 import { getMatchHistory } from '../services/db/database';
@@ -93,14 +92,9 @@ export default function MatchHistoryScreen({ playerId, onNavigate }: MatchHistor
               onPress={() => onNavigate('home')}
               activeOpacity={0.8}
             >
-              <LinearGradient
-                colors={colors.gradientPrimary}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.playButtonGradient}
-              >
+              <View>
                 <Text style={styles.playButtonText}>FIND A MATCH</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </View>
         ) : (

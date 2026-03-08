@@ -7,7 +7,6 @@ import {
   Easing,
   TouchableOpacity,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
 
 interface MatchmakingScreenProps {
@@ -171,12 +170,9 @@ export default function MatchmakingScreen({
                 },
               ]}
             >
-              <LinearGradient
-                colors={wagerType === 'skr' ? colors.gradientPurple : colors.gradientPrimary}
-                style={styles.searchCircleInner}
-              >
+              <View>
                 <Text style={styles.searchIcon}>⚔️</Text>
-              </LinearGradient>
+              </View>
             </Animated.View>
 
             <View style={styles.playerBadge}>
@@ -189,39 +185,30 @@ export default function MatchmakingScreen({
             <View style={styles.vsRow}>
               {/* You */}
               <View style={styles.matchPlayer}>
-                <LinearGradient
-                  colors={colors.gradientPrimary}
-                  style={styles.avatarCircle}
-                >
+                <View>
                   <Text style={styles.avatarText}>{playerUsername[0].toUpperCase()}</Text>
-                </LinearGradient>
+                </View>
                 <Text style={styles.matchPlayerName}>{playerUsername}</Text>
                 <Text style={styles.matchPlayerLabel}>YOU</Text>
               </View>
 
               {/* VS */}
               <View style={styles.matchVsBox}>
-                <LinearGradient
-                  colors={['#FFD700', '#B8860B'] as const}
-                  style={styles.vsCircle}
-                >
+                <View>
                   <Text style={styles.vsCircleText}>VS</Text>
-                </LinearGradient>
+                </View>
               </View>
 
               {/* Opponent */}
               <View style={styles.matchPlayer}>
-                <LinearGradient
-                  colors={colors.gradientPurple}
-                  style={styles.avatarCircle}
-                >
+                <View>
                   <Text style={styles.avatarText}>
                     {(match.playerA.username === playerUsername
                       ? match.playerB.username
                       : match.playerA.username
                     )[0].toUpperCase()}
                   </Text>
-                </LinearGradient>
+                </View>
                 <Text style={styles.matchPlayerName}>
                   {match.playerA.username === playerUsername
                     ? match.playerB.username

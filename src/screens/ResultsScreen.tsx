@@ -8,7 +8,6 @@ import {
   Easing,
   ScrollView,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
 import { Match, PlayerAnswer } from '../types';
@@ -252,14 +251,9 @@ export default function ResultsScreen({
 
         {/* Action buttons */}
         <TouchableOpacity style={styles.playAgainBtn} onPress={onPlayAgain} activeOpacity={0.8}>
-          <LinearGradient
-            colors={colors.gradientPrimary}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.playAgainGradient}
-          >
+          <View>
             <Text style={styles.playAgainText}>PLAY AGAIN</Text>
-          </LinearGradient>
+          </View>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.homeBtn} onPress={onGoHome}>
