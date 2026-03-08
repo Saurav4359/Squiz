@@ -65,7 +65,7 @@ export default function ProfileScreen({
   const winRate = player.matchesPlayed > 0 ? Math.round((player.matchesWon / player.matchesPlayed) * 100) : 0;
 
   const getRankAccent = (title: string) => {
-    if (title === 'Diamond Seeker') return '#EF4444';
+    if (title === 'Diamond Squiz') return '#EF4444';
     if (title === 'Alpha Ape') return '#A855F7';
     if (title === 'Solana Samurai') return '#FACC15';
     if (title === 'Sol Titan') return '#9BEA3C';
@@ -251,7 +251,7 @@ export default function ProfileScreen({
 
         {!player.isSkrStaker && walletBalance && walletBalance.skr > 0 && onUpdatePlayer && (
           <TouchableOpacity style={styles.secondaryButtonCard} onPress={() => onUpdatePlayer({ isSkrStaker: true })} activeOpacity={0.8}>
-            <Text style={styles.secondaryText}>Join Seeker Champions</Text>
+            <Text style={styles.secondaryText}>Join Squiz Champions</Text>
             <Text style={styles.bodyText}>Stake your SKR for 1.5x XP</Text>
           </TouchableOpacity>
         )}

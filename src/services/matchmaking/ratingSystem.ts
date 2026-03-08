@@ -140,7 +140,7 @@ export function getRankTitle(rating: number): string {
   if (rating >= 2000) return 'Sol Titan';
   if (rating >= 1700) return 'Solana Samurai';
   if (rating >= 1400) return 'Alpha Ape';
-  if (rating >= 1100) return 'Diamond Seeker';
+  if (rating >= 1100) return 'Diamond Squiz';
   if (rating >= 800) return 'Chain Challenger';
-  return 'Rookie Seeker';
+  return 'Rookie Squiz';
 }

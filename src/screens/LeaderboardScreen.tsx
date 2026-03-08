@@ -122,7 +122,7 @@ export default function LeaderboardScreen({
     <View style={styles.container}>
       <View>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Seeker Ranks</Text>
+          <Text style={styles.headerTitle}>Squiz</Text>
           <Text style={styles.headerSub}>Arena Champions</Text>
         </View>
       </View>

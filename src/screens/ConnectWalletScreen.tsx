@@ -60,6 +60,7 @@ export default function ConnectWalletScreen({
   const ring2 = useRef(new Animated.Value(0)).current;
   const ring3 = useRef(new Animated.Value(0)).current;
   const formSlide = useRef(new Animated.Value(50)).current;
+  const titleGlow = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Logo entrance
@@ -100,6 +101,22 @@ export default function ConnectWalletScreen({
     pulseRing(ring1, 0);
     pulseRing(ring2, 700);
     pulseRing(ring3, 1400);
+
+    // Title breathing neon glow
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(titleGlow, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(titleGlow, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        })
+      ])
+    ).start();
   }, []);
 
   // Slide in form when isNewUser
@@ -198,7 +215,7 @@ export default function ConnectWalletScreen({
         <View style={styles.textArea}>
           <Text style={styles.title}>AUTHENTICATING</Text>
           <Text style={styles.subtitle}>
-            Fetching your Seeker profile...
+            Fetching your Squiz profile...
           </Text>
           <View style={styles.connectedBadge}>
             <View style={styles.connectedDot} />
@@ -384,7 +401,16 @@ export default function ConnectWalletScreen({
         </View>
 
         <Animated.View style={[styles.textArea, { opacity: contentOpacity }]}>
-          <Text style={styles.title}>SEEKER RANK</Text>
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>SQUIZ</Text>
+            <Animated.Text style={[
+              styles.title, 
+              styles.titleGlowLayer,
+              { opacity: titleGlow }
+            ]}>
+              SQUIZ
+            </Animated.Text>
+          </View>
           <Text style={styles.subtitle}>
             1v1 Quiz Battles{'\n'}Powered by Solana
           </Text>
@@ -503,12 +529,28 @@ const styles = StyleSheet.create({
   textArea: {
     alignItems: 'center',
   },
+  titleContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   title: {
-    fontSize: fontSize.hero,
-    fontWeight: fontWeight.extrabold,
-    color: colors.text,
-    letterSpacing: 4,
+    fontSize: 68,
+    fontWeight: '900',
+    color: colors.text, // White core
+    letterSpacing: 8,
     textAlign: 'center',
+    textShadowColor: colors.primary, // Core glow
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+    textTransform: 'uppercase',
+  },
+  titleGlowLayer: {
+    position: 'absolute',
+    color: 'transparent', // We only want the shadow to be visible on this layer
+    textShadowColor: colors.primary,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 36, // Huge breathing glow
+    zIndex: -1, // Behind the core text
   },
   subtitle: {
     fontSize: fontSize.lg,
