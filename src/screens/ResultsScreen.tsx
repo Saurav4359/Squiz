@@ -251,7 +251,7 @@ export default function ResultsScreen({
 
         {/* Action buttons */}
         <TouchableOpacity style={styles.playAgainBtn} onPress={onPlayAgain} activeOpacity={0.8}>
-          <View>
+          <View style={styles.playAgainInner}>
             <Text style={styles.playAgainText}>PLAY AGAIN</Text>
           </View>
         </TouchableOpacity>
@@ -464,7 +464,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 10,
   },
-  playAgainGradient: {
+  playAgainInner: {
+    backgroundColor: colors.primary,
     paddingVertical: spacing.xl,
     alignItems: 'center',
     borderRadius: borderRadius.lg,
