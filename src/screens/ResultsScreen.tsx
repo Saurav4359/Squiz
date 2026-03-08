@@ -7,11 +7,13 @@ import {
   Animated,
   Easing,
   ScrollView,
+  Linking,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../config/theme';
 import { Match, PlayerAnswer } from '../types';
 import { RatingResult } from '../services/matchmaking/ratingSystem';
+import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 
 interface ResultsScreenProps {
   match: Match;
@@ -91,6 +93,14 @@ export default function ResultsScreen({
     myData.answers.length > 0
       ? myData.answers.reduce((sum, a) => sum + a.reactionTimeMs, 0) / myData.answers.length
       : 0;
+
+  const payoutSOL = match.payoutLamports
+    ? (match.payoutLamports / 1_000_000_000).toFixed(4)
+    : null;
+
+  const openExplorer = (txSig: string) => {
+    Linking.openURL(`https://explorer.solana.com/tx/${txSig}?cluster=devnet`);
+  };
 
   return (
     <View style={styles.container}>
@@ -248,6 +258,34 @@ export default function ResultsScreen({
             </View>
           </View>
         </Animated.View>
+
+        {/* Payout Info (only show when winner and payout exists) */}
+        {isWinner && payoutSOL && (
+          <View style={[styles.card, styles.payoutCard]}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>💰 Payout</Text>
+            </View>
+            <Text style={styles.payoutAmount}>{payoutSOL} SOL</Text>
+            <Text style={styles.payoutLabel}>sent to your wallet</Text>
+            {match.payoutTx && (
+              <TouchableOpacity
+                style={styles.explorerBtn}
+                onPress={() => openExplorer(match.payoutTx!)}
+              >
+                <Text style={styles.explorerBtnText}>View on Solana Explorer ↗</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {isDraw && (
+          <View style={[styles.card, styles.refundCard]}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>🤝 Draw — Refund</Text>
+            </View>
+            <Text style={styles.payoutLabel}>Wagers are being refunded</Text>
+          </View>
+        )}
 
         {/* Action buttons */}
         <TouchableOpacity style={styles.playAgainBtn} onPress={onPlayAgain} activeOpacity={0.8}>
@@ -485,5 +523,43 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: colors.textSecondary,
     fontWeight: fontWeight.medium,
+  },
+
+  // Payout Card
+  payoutCard: {
+    borderColor: colors.primary,
+    borderWidth: 1,
+  },
+  refundCard: {
+    borderColor: colors.warning,
+    borderWidth: 1,
+  },
+  payoutAmount: {
+    fontSize: fontSize.xxxl,
+    fontWeight: fontWeight.extrabold,
+    color: colors.primary,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  payoutLabel: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  explorerBtn: {
+    alignSelf: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.bgElevated,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    marginTop: spacing.sm,
+  },
+  explorerBtnText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.primary,
   },
 });

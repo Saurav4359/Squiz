@@ -42,9 +42,12 @@ CREATE TABLE IF NOT EXISTS matches (
     player_b JSONB NOT NULL,
     winner_id TEXT,
     wager_lamports BIGINT DEFAULT 0,
+    wager_amount BIGINT DEFAULT 0,
     wager_type TEXT DEFAULT 'sol',
-    escrow_address TEXT,
-    escrow_status TEXT DEFAULT 'none',
+    player_a_deposit_tx TEXT,
+    player_b_deposit_tx TEXT,
+    payout_tx TEXT,
+    payout_lamports BIGINT,
     created_at BIGINT,
     ended_at BIGINT
 );

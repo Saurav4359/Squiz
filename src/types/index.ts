@@ -55,6 +55,12 @@ export interface Match {
   createdAt: number;
   startedAt?: number;
   endedAt?: number;
+  // Treasury deposit tracking
+  playerADepositTx?: string;
+  playerBDepositTx?: string;
+  // Payout tracking
+  payoutTx?: string;
+  payoutLamports?: number;
 }
 
 export interface MatchPlayer {
@@ -78,6 +84,7 @@ export interface PlayerAnswer {
 export type MatchStatus =
   | 'waiting_for_opponent'
   | 'waiting_for_deposits'
+  | 'funded'
   | 'in_progress'
   | 'finished'
   | 'cancelled'

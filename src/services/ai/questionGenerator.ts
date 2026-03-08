@@ -88,7 +88,7 @@ export async function generateQuestionsFromNews(
         messages: [
           {
             role: 'system',
-            content: `You are a quiz question generator for SeekerRank, a Solana/Web3 speed-based quiz battle app.
+            content: `You are a quiz question generator for Squiz, a Solana/Web3 speed-based quiz battle app.
 
             Rules:
             - Questions must be 8-15 words max

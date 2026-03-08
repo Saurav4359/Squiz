@@ -17,10 +17,12 @@ import DepositScreen from './src/screens/DepositScreen';
 import { useWallet } from './src/hooks/useWallet';
 import { useAuth } from './src/hooks/useAuth';
 import { colors, fontSize, fontWeight, spacing } from './src/config/theme';
-import { DEFAULT_RATING, QUESTIONS_PER_MATCH, SECONDS_ANSWER_PHASE } from './src/config/constants';
+import { DEFAULT_RATING, QUESTIONS_PER_MATCH, SECONDS_ANSWER_PHASE, SOL_WAGER_LAMPORTS, TREASURY_ADDRESS, TREASURY_BACKEND_URL } from './src/config/constants';
 import { Player, Match, Question, DailyQuest, LeaderboardEntry } from './src/types';
 import { calculateMatchRatings, calculateDrawRatings, calculateXP } from './src/services/matchmaking/ratingSystem';
-import { getLeaderboard, persistMatchResult, updatePlayer, getPlayerById, updatePassword } from './src/services/db/database';
+import { getLeaderboard, persistMatchResult, updatePlayer, getPlayerById, updatePassword, updateMatchDeposit, updateMatchPayout, getMatchDepositStatus } from './src/services/db/database';
+import { sendSOLToAddress } from './src/services/wallet/solanaWallet';
+import { supabase } from './src/config/supabase';
 import {
   joinQueue,
   leaveQueue,
@@ -59,11 +61,10 @@ export default function App() {
   const localMatchRef = React.useRef<Match | null>(null);
   const [ratingResult, setRatingResult] = useState<any>(null);
   const [xpEarned, setXpEarned] = useState(0);
-  const [escrowState, setEscrowState] = useState<{
-    status: string;
+  const [depositState, setDepositState] = useState<{
     playerADeposited: boolean;
     playerBDeposited: boolean;
-  } | null>(null);
+  }>({ playerADeposited: false, playerBDeposited: false });
   const [depositing, setDepositing] = useState(false);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [viewedPlayer, setViewedPlayer] = useState<Player | null>(null);
@@ -219,20 +220,16 @@ export default function App() {
 
     let cancelled = false;
 
-    // TODO: implement actual treasury check for deposits instead of simulated
-    const syncEscrowState = async () => {
-      if (!cancelled) {
-        // Mock state: waiting for deposit
-        setEscrowState({
-          status: 'AwaitingDeposits',
-          playerADeposited: false,
-          playerBDeposited: false
-        });
+    // Poll Supabase for deposit status
+    const pollDeposits = async () => {
+      const status = await getMatchDepositStatus(currentMatch.id);
+      if (!cancelled && status) {
+        setDepositState(status);
       }
     };
 
-    syncEscrowState();
-    const interval = setInterval(syncEscrowState, 1500);
+    pollDeposits();
+    const interval = setInterval(pollDeposits, 2000);
 
     return () => {
       cancelled = true;
@@ -280,7 +277,7 @@ export default function App() {
       setCurrentMatch(null);
       setRatingResult(null);
       setXpEarned(0);
-      setEscrowState(null);
+      setDepositState({ playerADeposited: false, playerBDeposited: false });
       setDepositing(false);
       opponentFinishedRef.current = false;
       opponentDataRef.current = null;
@@ -331,19 +328,26 @@ export default function App() {
               },
             });
 
-            if (match.playerA.id === authHook.player!.id) {
-              // Wait before transitioning to depositing screen
-              setTimeout(() => {
-                if (sessionId !== matchSessionRef.current) return;
-                setCurrentScreen('depositing');
-              }, 2500);
-            } else {
-              // For playerB
-              setTimeout(() => {
-                if (sessionId !== matchSessionRef.current) return;
-                setCurrentScreen('depositing');
-              }, 2500);
+            // Create match record in Supabase so both players can track deposits
+            try {
+              await supabase.from('matches').upsert({
+                id: match.id,
+                player_a: match.playerA,
+                player_b: match.playerB,
+                wager_lamports: match.wagerLamports || SOL_WAGER_LAMPORTS,
+                wager_type: wager,
+                created_at: match.createdAt,
+              });
+            } catch (e) {
+              console.warn('[App] Failed to create match record:', e);
             }
+
+            // Show VS screen briefly then transition to deposit
+            setTimeout(() => {
+              if (sessionId !== matchSessionRef.current) return;
+              setDepositState({ playerADeposited: false, playerBDeposited: false });
+              setCurrentScreen('depositing');
+            }, 2500);
           },
           onError: (err) => {
             console.warn('[App] Matchmaking error:', err);
@@ -538,13 +542,71 @@ export default function App() {
     return { rResult, xp, oppXp, isWin, isDraw, correctCount, totalQ, effectiveWagerType };
   }, [authHook.player, wagerType]);
 
-  const settleMatchEscrow = useCallback(async (
+  const settleMatchPayout = useCallback(async (
     match: Match,
     winnerId: string | undefined,
     effectiveWagerType: 'sol' | 'skr',
   ) => {
-    // Escrow logic removed as we use treasury-wallet payout pattern.
-    // The backend will handle transferring the pot.
+    if (!winnerId) {
+      // Draw — attempt refund via backend
+      const playerAWallet = match.playerA.walletAddress;
+      const playerBWallet = match.playerB.walletAddress;
+      if (playerAWallet && playerBWallet) {
+        try {
+          await fetch(`${TREASURY_BACKEND_URL}/refund`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              matchId: match.id,
+              playerAWallet,
+              playerBWallet,
+              lamportsEach: match.wagerLamports || SOL_WAGER_LAMPORTS,
+            }),
+          });
+        } catch (e) {
+          console.warn('[App] Refund request failed:', e);
+        }
+      }
+      return;
+    }
+
+    // Winner payout
+    const winnerWallet = winnerId === match.playerA.id
+      ? match.playerA.walletAddress
+      : match.playerB.walletAddress;
+
+    if (!winnerWallet) {
+      console.warn('[App] Missing winner wallet for payout');
+      return;
+    }
+
+    const poolLamports = (match.wagerLamports || SOL_WAGER_LAMPORTS) * 2;
+
+    try {
+      const res = await fetch(`${TREASURY_BACKEND_URL}/payout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          matchId: match.id,
+          winnerWallet,
+          lamports: poolLamports,
+        }),
+      });
+
+      const result = await res.json();
+
+      if (result.success && result.signature) {
+        console.log(`[App] Payout sent: ${result.signature}`);
+        // Store payout tx in Supabase
+        await updateMatchPayout(match.id, result.signature, result.payoutLamports);
+        // Update local match state
+        setCurrentMatch(prev => prev ? { ...prev, payoutTx: result.signature, payoutLamports: result.payoutLamports } : prev);
+      } else {
+        console.warn('[App] Payout failed:', result.error);
+      }
+    } catch (e) {
+      console.warn('[App] Payout request failed:', e);
+    }
   }, []);
 
   // PlayerA: compute results, broadcast to playerB, persist to DB
@@ -598,12 +660,12 @@ export default function App() {
       .then(() => authHook.refreshPlayer())
       .catch((e) => console.warn('[App] Match persist failed:', e));
 
-    settleMatchEscrow(finishedMatch, winnerId, effectiveWagerType)
-      .catch((e) => console.warn('[App] Escrow settlement failed:', e));
+    settleMatchPayout(finishedMatch, winnerId, effectiveWagerType)
+      .catch((e) => console.warn('[App] Payout failed:', e));
 
     leaveMatchChannel();
     setCurrentScreen('results');
-  }, [authHook.player, wagerType, computeRatingsAndXP, settleMatchEscrow]);
+  }, [authHook.player, wagerType, computeRatingsAndXP, settleMatchPayout]);
 
   // PlayerB: apply authoritative result from playerA (no DB persist)
   const applyAuthoritativeResult = useCallback((result: MatchResult) => {
@@ -696,12 +758,12 @@ export default function App() {
       .then(() => authHook.refreshPlayer())
       .catch((e) => console.warn('[App] Match persist failed:', e));
 
-    settleMatchEscrow(finishedMatch, winnerId, effectiveWagerType)
-      .catch((e) => console.warn('[App] Escrow settlement failed:', e));
+    settleMatchPayout(finishedMatch, winnerId, effectiveWagerType)
+      .catch((e) => console.warn('[App] Payout failed:', e));
 
     leaveMatchChannel();
     setCurrentScreen('results');
-  }, [authHook.player, wagerType, computeRatingsAndXP, settleMatchEscrow]);
+  }, [authHook.player, wagerType, computeRatingsAndXP, settleMatchPayout]);
 
   const handleMatchEnd = useCallback(() => setCurrentScreen('results'), []);
   const handleNavigate = useCallback((s: string) => setCurrentScreen(s as Screen), []);
@@ -713,7 +775,7 @@ export default function App() {
     }
     leaveMatchChannel();
     setCurrentMatch(null);
-    setEscrowState(null);
+    setDepositState({ playerADeposited: false, playerBDeposited: false });
     setDepositing(false);
     setCurrentScreen('home');
   }, [authHook.player]);
@@ -776,25 +838,55 @@ export default function App() {
   // ─── DEPOSIT HANDLERS ──────────────────────────────────
   const handleDeposit = useCallback(async (): Promise<boolean> => {
     if (!currentMatch || !authHook.player) return false;
+
+    const authToken = wallet.authToken;
+    if (!authToken) {
+      Alert.alert('Wallet Error', 'No wallet session. Please reconnect.');
+      return false;
+    }
+
     setDepositing(true);
-    
-    // Simulate transaction delay
-    await new Promise(r => setTimeout(r, 1500));
-    
-    setDepositing(false);
-    
-    // Mock successful deposit update
-    setEscrowState(prev => {
-      const isPlayerA = currentMatch.playerA.id === authHook.player?.id;
-      return {
-        status: prev?.status || 'AwaitingDeposits',
-        playerADeposited: isPlayerA ? true : !!prev?.playerADeposited,
-        playerBDeposited: !isPlayerA ? true : !!prev?.playerBDeposited,
-      };
-    });
-    
-    return true;
-  }, [currentMatch, authHook.player]);
+
+    try {
+      const wagerLamports = currentMatch.wagerLamports || SOL_WAGER_LAMPORTS;
+
+      // Send SOL to treasury via Mobile Wallet Adapter
+      const txSignature = await sendSOLToAddress(
+        TREASURY_ADDRESS,
+        wagerLamports,
+        authToken
+      );
+
+      console.log(`[App] Deposit tx: ${txSignature}`);
+
+      // Store the deposit tx in Supabase
+      const isPlayerA = currentMatch.playerA.id === authHook.player.id;
+      await updateMatchDeposit(currentMatch.id, isPlayerA, txSignature);
+
+      // Update local match state
+      setCurrentMatch(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          ...(isPlayerA ? { playerADepositTx: txSignature } : { playerBDepositTx: txSignature }),
+        };
+      });
+
+      // Update local deposit state
+      setDepositState(prev => ({
+        ...prev,
+        ...(isPlayerA ? { playerADeposited: true } : { playerBDeposited: true }),
+      }));
+
+      setDepositing(false);
+      return true;
+    } catch (err: any) {
+      setDepositing(false);
+      console.warn('[App] Deposit failed:', err.message);
+      Alert.alert('Deposit Failed', err.message || 'Transaction was rejected or failed.');
+      return false;
+    }
+  }, [currentMatch, authHook.player, wallet.authToken]);
 
   const handleBothDeposited = useCallback(() => {
     setCurrentMatch((prev) =>
@@ -904,16 +996,17 @@ export default function App() {
         );
       case 'depositing': {
         if (!currentMatch) return null;
-        const isPlayerAInEscrow = currentMatch.playerA.id === player.id;
+        const isPlayerADeposit = currentMatch.playerA.id === player.id;
         return (
           <DepositScreen
             match={currentMatch}
             currentPlayerId={player.id}
             wagerType={wagerType}
-            myDeposited={isPlayerAInEscrow ? !!escrowState?.playerADeposited : !!escrowState?.playerBDeposited}
-            opponentDeposited={isPlayerAInEscrow ? !!escrowState?.playerBDeposited : !!escrowState?.playerADeposited}
+            wagerLamports={currentMatch.wagerLamports || SOL_WAGER_LAMPORTS}
+            myDeposited={isPlayerADeposit ? depositState.playerADeposited : depositState.playerBDeposited}
+            opponentDeposited={isPlayerADeposit ? depositState.playerBDeposited : depositState.playerADeposited}
             depositing={depositing}
-            onDeposited={handleDeposit}
+            onDeposit={handleDeposit}
             onBothDeposited={handleBothDeposited}
             onTimeout={handleDepositTimeout}
             onCancel={handleCancel}

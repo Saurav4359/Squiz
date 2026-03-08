@@ -1,6 +1,6 @@
-# SeekerRank High-Performance Backend
+# Squiz High-Performance Backend
 
-This is the real-time engine for SeekerRank, built with **Bun** for maximum throughput and **Socket.io** for sub-100ms latency gameplay.
+This is the real-time engine for Squiz, built with **Bun** for maximum throughput and **Socket.io** for sub-100ms latency gameplay.
 
 ## 🚀 How to Run
 

@@ -101,7 +101,7 @@ export default function ProfileScreen({
 
   const handleShareProfile = async () => {
     const message = [
-      `SeekerRank Arena Card`,
+      `Squiz Arena Card`,
       `${player.username}`,
       `${rankTitle} ⚔`,
       `${Math.round(player.rating)} Rating`,
@@ -301,7 +301,7 @@ export default function ProfileScreen({
             <ViewShot ref={shareCardRef} options={{ format: 'png', quality: 1, result: 'tmpfile' }}>
               <View style={styles.shareCard}>
                 <View style={[styles.shareCardGlow, { backgroundColor: rankAccent }]} />
-                <Text style={styles.shareCardBrand}>SEEKERRANK</Text>
+                <Text style={styles.shareCardBrand}>SQUIZ</Text>
                 <Text style={styles.shareCardName}>{player.username}</Text>
                 <Text style={[styles.shareCardRank, { color: rankAccent }]}>{rankTitle} ⚔</Text>
                 <Text style={styles.shareCardRating}>{Math.round(player.rating)} Rating</Text>
@@ -333,7 +333,7 @@ export default function ProfileScreen({
                     <Text style={styles.shareCardStatLabel}>Level</Text>
                   </View>
                 </View>
-                <Text style={styles.shareCardFooter}>#SeekerRank #Solana #Web3Gaming</Text>
+                <Text style={styles.shareCardFooter}>#Squiz #Solana #Web3Gaming</Text>
               </View>
             </ViewShot>
 

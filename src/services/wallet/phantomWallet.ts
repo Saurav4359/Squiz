@@ -7,8 +7,8 @@ import * as SecureStore from 'expo-secure-store';
 import { WalletSession } from './solanaWallet';
 
 const CLUSTER = 'devnet';
-const STORAGE_PREFIX = 'seekerrank_phantom_';
-const APP_URL = 'https://seekerrank.app';
+const STORAGE_PREFIX = 'squiz_phantom_';
+const APP_URL = 'https://squiz.app';
 
 let dAppKeyPair: nacl.BoxKeyPair | null = null;
 

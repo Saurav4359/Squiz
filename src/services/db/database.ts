@@ -274,12 +274,71 @@ export async function persistMatchResult(data: any): Promise<void> {
         wager_lamports: match.wagerLamports || 0,
         wager_amount: match.wagerAmount || 0,
         wager_type: wagerType || 'sol',
+        player_a_deposit_tx: match.playerADepositTx || null,
+        player_b_deposit_tx: match.playerBDepositTx || null,
+        payout_tx: match.payoutTx || null,
+        payout_lamports: match.payoutLamports || null,
         created_at: match.createdAt,
         ended_at: now,
       });
   } catch (e) {
     console.warn('[DB] Match record insertion failed:', e);
   }
+}
+
+// ─── Deposit tracking ────────────────────────────────────────
+export async function updateMatchDeposit(
+  matchId: string,
+  isPlayerA: boolean,
+  txSignature: string
+): Promise<void> {
+  const column = isPlayerA ? 'player_a_deposit_tx' : 'player_b_deposit_tx';
+  try {
+    await supabase
+      .from('matches')
+      .update({ [column]: txSignature })
+      .eq('id', matchId);
+  } catch (e) {
+    console.warn(`[DB] Failed to update deposit tx for ${matchId}:`, e);
+  }
+}
+
+// ─── Payout tracking ─────────────────────────────────────────
+export async function updateMatchPayout(
+  matchId: string,
+  payoutTx: string,
+  payoutLamports: number
+): Promise<void> {
+  try {
+    await supabase
+      .from('matches')
+      .update({
+        payout_tx: payoutTx,
+        payout_lamports: payoutLamports,
+      })
+      .eq('id', matchId);
+  } catch (e) {
+    console.warn(`[DB] Failed to update payout tx for ${matchId}:`, e);
+  }
+}
+
+// ─── Get deposit status for a match ──────────────────────────
+export async function getMatchDepositStatus(matchId: string): Promise<{
+  playerADeposited: boolean;
+  playerBDeposited: boolean;
+} | null> {
+  const { data, error } = await supabase
+    .from('matches')
+    .select('player_a_deposit_tx, player_b_deposit_tx')
+    .eq('id', matchId)
+    .single();
+
+  if (error || !data) return null;
+
+  return {
+    playerADeposited: !!data.player_a_deposit_tx,
+    playerBDeposited: !!data.player_b_deposit_tx,
+  };
 }
 
 // ─── Match History ───────────────────────────────────────────

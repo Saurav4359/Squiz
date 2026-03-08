@@ -10,15 +10,18 @@ import {
 } from 'react-native';
 import { colors, spacing, borderRadius, fontSize, fontWeight } from '../config/theme';
 import { Match, MatchPlayer } from '../types';
+import { TREASURY_ADDRESS } from '../config/constants';
+import { shortenAddress } from '../services/wallet/solanaWallet';
 
 interface DepositScreenProps {
   match: Match;
   currentPlayerId: string;
   wagerType: 'sol' | 'skr';
+  wagerLamports: number;
   myDeposited: boolean;
   opponentDeposited: boolean;
   depositing: boolean;
-  onDeposited: () => Promise<boolean>;
+  onDeposit: () => Promise<boolean>;
   onBothDeposited: () => void;
   onTimeout: () => void;
   onCancel: () => void;
@@ -28,15 +31,16 @@ export default function DepositScreen({
   match,
   currentPlayerId,
   wagerType,
+  wagerLamports,
   myDeposited,
   opponentDeposited,
   depositing,
-  onDeposited,
+  onDeposit,
   onBothDeposited,
   onTimeout,
   onCancel,
 }: DepositScreenProps) {
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(90);
   const leftCoinX = useRef(new Animated.Value(-80)).current;
   const leftCoinY = useRef(new Animated.Value(-18)).current;
   const rightCoinX = useRef(new Animated.Value(80)).current;
@@ -50,7 +54,8 @@ export default function DepositScreen({
   const opponent: MatchPlayer =
     match.playerA.id === currentPlayerId ? match.playerB : match.playerA;
 
-  const wagerDisplay = wagerType === 'sol' ? '0.05 SOL' : '50 SKR';
+  const wagerSOL = wagerLamports / 1_000_000_000;
+  const wagerDisplay = wagerType === 'sol' ? `${wagerSOL} SOL` : '50 SKR';
   const accentColor = wagerType === 'sol' ? colors.secondary : colors.purple;
 
   // Countdown timer
@@ -122,8 +127,8 @@ export default function DepositScreen({
   }, [myDeposited, opponentDeposited, onBothDeposited, coinOpacity, leftCoinX, leftCoinY, rightCoinX, rightCoinY, potScale]);
 
   const handleDeposit = useCallback(() => {
-    void onDeposited();
-  }, [onDeposited]);
+    void onDeposit();
+  }, [onDeposit]);
 
   const timerColor =
     timeLeft <= 10 ? colors.danger : timeLeft <= 30 ? colors.warning : colors.textSecondary;
@@ -160,9 +165,15 @@ export default function DepositScreen({
         <Text style={[styles.wagerAmount, { color: accentColor }]}>{wagerDisplay}</Text>
       </View>
 
+      {/* Treasury info */}
+      <View style={styles.treasuryInfo}>
+        <Text style={styles.treasuryLabel}>SENDING TO TREASURY</Text>
+        <Text style={styles.treasuryAddress}>{shortenAddress(TREASURY_ADDRESS, 6)}</Text>
+      </View>
+
       <View style={styles.potArea}>
         <Animated.View style={[styles.potCore, { transform: [{ scale: potScale }] }]}>
-          <Text style={styles.potIcon}>POT</Text>
+          <Text style={styles.potIcon}>💰</Text>
           <Text style={styles.potText}>Prize Pot</Text>
         </Animated.View>
 
@@ -203,7 +214,7 @@ export default function DepositScreen({
           ) : depositing ? (
             <View style={styles.statusWaiting}>
               <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={styles.statusCompleteText}>Depositing...</Text>
+              <Text style={styles.statusCompleteText}>Signing...</Text>
             </View>
           ) : (
             <TouchableOpacity
@@ -211,7 +222,7 @@ export default function DepositScreen({
               onPress={handleDeposit}
               disabled={depositing}
             >
-              <Text style={styles.depositButtonText}>Deposit</Text>
+              <Text style={styles.depositButtonText}>Send {wagerDisplay}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -263,14 +274,14 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
     color: colors.text,
     textAlign: 'center',
-    marginBottom: spacing.xxxl,
+    marginBottom: spacing.xxl,
   },
   vsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    marginBottom: spacing.xxxl,
+    marginBottom: spacing.xxl,
   },
   playerSide: {
     flex: 1,
@@ -315,9 +326,38 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgElevated,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    paddingVertical: spacing.xxl,
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  wagerLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    color: colors.textDim,
+    letterSpacing: 1.5,
+    marginBottom: spacing.sm,
+  },
+  wagerAmount: {
+    fontSize: fontSize.display,
+    fontWeight: fontWeight.extrabold,
+  },
+  treasuryInfo: {
     alignItems: 'center',
     marginBottom: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  treasuryLabel: {
+    fontSize: 10,
+    fontWeight: fontWeight.semibold,
+    color: colors.textDim,
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  treasuryAddress: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.textSecondary,
+    fontFamily: 'monospace',
   },
   potArea: {
     width: '100%',
@@ -363,17 +403,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: fontWeight.bold,
   },
-  wagerLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-    color: colors.textDim,
-    letterSpacing: 1.5,
-    marginBottom: spacing.sm,
-  },
-  wagerAmount: {
-    fontSize: fontSize.display,
-    fontWeight: fontWeight.extrabold,
-  },
   statusSection: {
     width: '100%',
     backgroundColor: colors.bgElevated,
@@ -382,7 +411,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xl,
-    marginBottom: spacing.xxxl,
+    marginBottom: spacing.xxl,
   },
   statusRow: {
     flexDirection: 'row',
@@ -437,7 +466,7 @@ const styles = StyleSheet.create({
   },
   timerContainer: {
     alignItems: 'center',
-    marginBottom: spacing.xxxl,
+    marginBottom: spacing.xxl,
   },
   timerText: {
     fontSize: fontSize.hero,

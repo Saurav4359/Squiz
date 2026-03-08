@@ -1,1 +1,1 @@
-# SeekerRank
+# Squiz

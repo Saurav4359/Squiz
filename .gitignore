@@ -1,6 +1,7 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
 # dependencies
+solscan-react-native/
 node_modules/
 .env
 # Expo
@@ -40,14 +41,7 @@ yarn-error.*
 /ios
 /android
 
-# Anchor / Solana program build
-target/
-programs/seekerrank-escrow/target/
-
-# backend-resolver secrets
-backend-resolver/authority-keypair.json
-backend-resolver/node_modules/
-backend-resolver/.env
-# Local Solana validator ledgers (large generated artifacts)
-test-ledger/
-programs/seekerrank-escrow/test-ledger/
+# Treasury backend
+backend/treasury.json
+backend/.env
+backend/node_modules/

@@ -1,7 +1,7 @@
 import { mmkvStorage } from '../../lib/storage';
 import { Question } from '../../types';
 
-const SEEN_QUESTIONS_KEY = 'seekerrank_seen_questions';
+const SEEN_QUESTIONS_KEY = 'squiz_seen_questions';
 
 function normalizeQuestion(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]/g, '').trim();

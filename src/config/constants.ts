@@ -15,7 +15,8 @@ export const BIRDEYE_API_KEY = process.env.EXPO_PUBLIC_BIRDEYE_API_KEY || '40d4a
 
 // Solana
 export const SKR_MINT_ADDRESS = 'SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3';
-export const HOUSE_WALLET = ''; // Set to house wallet pubkey
+export const TREASURY_ADDRESS = 'J6utNEGcSTw6Nwjpx4HSpkp3sgXAGz7n3Web71eyaANC';
+export const TREASURY_BACKEND_URL = process.env.EXPO_PUBLIC_TREASURY_URL || 'http://192.168.1.181:3001'; // Physical device → Laptop IP
 export const SOL_WAGER_LAMPORTS = 50_000_000; // 0.05 SOL
 export const SKR_WAGER_BASE_UNITS = 50_000_000_000; // 50 SKR (assuming 9 decimals)
 

@@ -148,7 +148,7 @@ export default function ConnectWalletScreen({
   const handleShowRecoveryHelp = () => {
     Alert.alert(
       "Account Recovery Help",
-      "1. FORGOT USERNAME?\nConnect your ORIGINAL wallet address. SeekerRank will recognize you and log you in automatically.\n\n" +
+      "1. FORGOT USERNAME?\nConnect your ORIGINAL wallet address. Squiz will recognize you and log you in automatically.\n\n" +
       "2. FORGOT PASSWORD?\nIf you have your original wallet connected, you can reset your password in Profile Settings.\n\n" +
       "3. NEW WALLET?\nIf you are using a new wallet address, you MUST remember your old Username and Password to link your profile to this new device.",
       [{ text: "OK", style: "default" }]
@@ -230,7 +230,7 @@ export default function ConnectWalletScreen({
             <Text style={styles.onboardSubtitle}>
               {isLoginMode 
                 ? 'Enter your credentials to continue'
-                : 'Choose your identity on SeekerRank'
+                : 'Choose your identity on Squiz'
               }
             </Text>
 
@@ -448,7 +448,7 @@ export default function ConnectWalletScreen({
       </ScrollView>
 
       {/* Version tag */}
-      <Text style={styles.versionText}>SeekerRank v1.0.0 • Devnet</Text>
+      <Text style={styles.versionText}>Squiz v1.0.0 • Devnet</Text>
     </View>
   );
 }
