@@ -29,16 +29,32 @@ const RPC_URL = process.env.RPC_URL || 'https://api.mainnet-beta.solana.com';
 const HOUSE_CUT_BPS = Number(process.env.HOUSE_CUT_BPS) || 200; // 2% = 200 basis points
 
 // ─── Load Treasury Keypair ────────────────────────────────
+// Supports two modes:
+//   1. Production (Railway): set TREASURY_KEYPAIR env var to the JSON array
+//   2. Local dev: treasury.json file in this directory
 const TREASURY_PATH = resolve(import.meta.dir, 'treasury.json');
 let treasuryKeypair: Keypair;
 
 try {
-  const raw = readFileSync(TREASURY_PATH, 'utf-8');
-  const secretKey = new Uint8Array(JSON.parse(raw));
+  let secretKey: Uint8Array;
+
+  if (process.env.TREASURY_KEYPAIR) {
+    // Production: load from environment variable
+    secretKey = new Uint8Array(JSON.parse(process.env.TREASURY_KEYPAIR));
+    console.log('🔑 Treasury loaded from TREASURY_KEYPAIR env var');
+  } else {
+    // Local dev: load from treasury.json file
+    const raw = readFileSync(TREASURY_PATH, 'utf-8');
+    secretKey = new Uint8Array(JSON.parse(raw));
+    console.log('🔑 Treasury loaded from treasury.json');
+  }
+
   treasuryKeypair = Keypair.fromSecretKey(secretKey);
   console.log(`💰 Treasury wallet: ${treasuryKeypair.publicKey.toBase58()}`);
 } catch (err) {
-  console.error('❌ Failed to load treasury.json — run: solana-keygen new --outfile backend/treasury.json');
+  console.error('❌ Failed to load treasury keypair.');
+  console.error('   For production: set TREASURY_KEYPAIR env var to the JSON array from treasury.json');
+  console.error('   For local dev: ensure backend/treasury.json exists');
   process.exit(1);
 }
 
