@@ -20,7 +20,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_SOLANA_NETWORK": "devnet"
+        "EXPO_PUBLIC_SOLANA_NETWORK": "mainnet-beta",
+        "EXPO_PUBLIC_TREASURY_URL": "https://seekerrank-production.up.railway.app"
       }
     },
     "production": {
