@@ -99,7 +99,6 @@ export function useWallet(): UseWalletReturn {
     }
   }, []);
 
-
   // Disconnect
   const disconnect = useCallback(async () => {
     await disconnectWallet();
