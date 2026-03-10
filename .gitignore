@@ -45,3 +45,4 @@ yarn-error.*
 backend/treasury.json
 backend/.env
 backend/node_modules/
+*.apk

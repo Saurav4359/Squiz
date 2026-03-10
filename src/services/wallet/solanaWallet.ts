@@ -7,8 +7,8 @@ import * as SecureStore from 'expo-secure-store';
 
 // ─── Identity ────────────────────────────────────────────
 const APP_IDENTITY = {
-  name: 'Squiz',
-  uri: 'https://squiz.app',
+  name: 'Suiz',
+  uri: 'https://suiz.app',
   icon: 'favicon.ico',
 };
 
@@ -24,7 +24,7 @@ function isMWAAvailable(): boolean {
 }
 
 // ─── Connection ──────────────────────────────────────────
-const CLUSTER = 'mainnet-beta';
+const CLUSTER: 'mainnet-beta' = 'mainnet-beta';
 const RPC_ENDPOINT = HELIUS_RPC_URL || clusterApiUrl(CLUSTER);
 
 let _connection: Connection | null = null;
@@ -37,7 +37,7 @@ export function getConnection(): Connection {
 }
 
 // ─── Simple KV Storage (works in Expo Go) ────────────────
-const STORAGE_PREFIX = 'squiz_';
+const STORAGE_PREFIX = 'suiz_';
 
 async function storageSet(key: string, value: string): Promise<void> {
   try {
@@ -82,7 +82,7 @@ export async function connectWallet(): Promise<WalletSession> {
   // Check if MWA native module is available (not in Expo Go)
   if (!isMWAAvailable()) {
     throw new Error(
-      'MWA not available in Expo Go. Use dev connect (tap logo 3x) or build a dev client.'
+      'Wallet connection failed. Please use a Solana wallet app on this device.'
     );
   }
 
@@ -91,7 +91,7 @@ export async function connectWallet(): Promise<WalletSession> {
 
     const session = await transact(async (wallet: any) => {
       const auth = await wallet.authorize({
-        cluster: CLUSTER,
+        cluster: 'mainnet-beta',
         identity: APP_IDENTITY,
       });
 
@@ -224,7 +224,7 @@ export async function signAndSendTransaction(
     const signedTransaction = await transact(async (wallet: any) => {
       // Switch from reauthorize to authorize for better reliability
       await wallet.authorize({
-        cluster: CLUSTER,
+        cluster: 'mainnet-beta',
         identity: APP_IDENTITY,
       });
 

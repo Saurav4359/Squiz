@@ -65,7 +65,7 @@ export default function ProfileScreen({
   const winRate = player.matchesPlayed > 0 ? Math.round((player.matchesWon / player.matchesPlayed) * 100) : 0;
 
   const getRankAccent = (title: string) => {
-    if (title === 'Diamond Squiz') return '#EF4444';
+    if (title === 'Diamond Suiz') return '#EF4444';
     if (title === 'Alpha Ape') return '#A855F7';
     if (title === 'Solana Samurai') return '#FACC15';
     if (title === 'Sol Titan') return '#9BEA3C';
@@ -101,7 +101,7 @@ export default function ProfileScreen({
 
   const handleShareProfile = async () => {
     const message = [
-      `Squiz Arena Card`,
+      `Suiz Arena Card`,
       `${player.username}`,
       `${rankTitle} ⚔`,
       `${Math.round(player.rating)} Rating`,
@@ -251,7 +251,7 @@ export default function ProfileScreen({
 
         {!player.isSkrStaker && walletBalance && walletBalance.skr > 0 && onUpdatePlayer && (
           <TouchableOpacity style={styles.secondaryButtonCard} onPress={() => onUpdatePlayer({ isSkrStaker: true })} activeOpacity={0.8}>
-            <Text style={styles.secondaryText}>Join Squiz Champions</Text>
+            <Text style={styles.secondaryText}>Join Suiz Champions</Text>
             <Text style={styles.bodyText}>Stake your SKR for 1.5x XP</Text>
           </TouchableOpacity>
         )}
@@ -301,7 +301,7 @@ export default function ProfileScreen({
             <ViewShot ref={shareCardRef} options={{ format: 'png', quality: 1, result: 'tmpfile' }}>
               <View style={styles.shareCard}>
                 <View style={[styles.shareCardGlow, { backgroundColor: rankAccent }]} />
-                <Text style={styles.shareCardBrand}>SQUIZ</Text>
+                <Text style={styles.shareCardBrand}>SUIZ</Text>
                 <Text style={styles.shareCardName}>{player.username}</Text>
                 <Text style={[styles.shareCardRank, { color: rankAccent }]}>{rankTitle} ⚔</Text>
                 <Text style={styles.shareCardRating}>{Math.round(player.rating)} Rating</Text>
@@ -333,7 +333,7 @@ export default function ProfileScreen({
                     <Text style={styles.shareCardStatLabel}>Level</Text>
                   </View>
                 </View>
-                <Text style={styles.shareCardFooter}>#Squiz #Solana #Web3Gaming</Text>
+                <Text style={styles.shareCardFooter}>#Suiz #Solana #Web3Gaming</Text>
               </View>
             </ViewShot>
 

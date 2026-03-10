@@ -2,7 +2,7 @@
   "expo": {
     "name": "Suiz",
     "slug": "seekerrank",
-    "scheme": "squiz",
+    "scheme": "suiz",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,17 +15,27 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.saurav.squiz"
+      "bundleIdentifier": "com.saurav.suiz"
     },
     "android": {
-      "package": "com.saurav.squiz",
+      "package": "com.saurav.suiz",
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png",
         "backgroundColor": "#17022d"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            { "scheme": "suiz" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
