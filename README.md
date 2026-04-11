@@ -1,8 +1,11 @@
+
 # Squiz (SeekerRank)
 
 Squiz is a real-time multiplayer trivia game for Solana wallets. Players connect a wallet, create a profile, get matched with an opponent, answer timed multiple-choice questions, and compete for SOL or SKR wagers.
 
 The app is built as a mobile experience with React Native and Expo, backed by Supabase for player data and realtime matchmaking. A Bun server handles treasury deposits, payouts, and refunds.
+
+https://github.com/user-attachments/assets/c30e215b-beb9-4536-b359-9bfeda0f9656
 
 ## What it includes
 
